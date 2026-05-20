@@ -49,6 +49,7 @@ function placeTopRight(win) {
 function showMainWindow() {
   if (!mainWindow) return;
   placeTopRight(mainWindow);
+  mainWindow.setSkipTaskbar(true);
   mainWindow.show();
   mainWindow.focus();
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -85,7 +86,7 @@ function createWindow() {
     transparent: true,
     hasShadow: false,
     resizable: true,
-    skipTaskbar: false,
+    skipTaskbar: true,
     alwaysOnTop: true,
     title: 'Ntodo',
     icon: getIconPath(),
