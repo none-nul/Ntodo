@@ -55,10 +55,13 @@ npm run dist:installer
 安装包会输出到同一个 `release` 目录：
 
 ```text
-release\Ntodo-Setup-0.1.0.exe
+release\Ntodo-Setup-当前版本号.exe
 ```
 
+安装包使用固定 `appId`：`com.ntodo.desktop`。升级安装时会识别已安装的 Ntodo，并覆盖到原安装目录。  
 如果旧版 Ntodo 正在运行，构建脚本会停止并提示先从托盘菜单退出旧版应用。
+
+版本号按补丁版本递增。当前版本是 `0.1.1`，后续小版本依次为 `0.1.2`、`0.1.3`。
 
 ## 当前功能
 
