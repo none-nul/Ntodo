@@ -1,0 +1,8 @@
+node_modules/
+dist/
+installer/
+portable/
+release/
+.npm-cache/
+.cache/
+*.log

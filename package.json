@@ -1,0 +1,54 @@
+{
+  "name": "ntodo",
+  "version": "0.1.0",
+  "description": "Ntodo desktop sticky task note",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "make:icon": "powershell -ExecutionPolicy Bypass -File tools/make-icon.ps1",
+    "dist": "powershell -ExecutionPolicy Bypass -File tools/build.ps1",
+    "dist:installer": "powershell -ExecutionPolicy Bypass -File tools/build.ps1 -Installer",
+    "dist:portable": "powershell -ExecutionPolicy Bypass -File tools/build.ps1 -Portable"
+  },
+  "keywords": [
+    "todo",
+    "electron",
+    "desktop"
+  ],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.ntodo.desktop",
+    "productName": "Ntodo",
+    "artifactName": "Ntodo-${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/ntodo.ico",
+      "signAndEditExecutable": false,
+      "target": "dir"
+    },
+    "portable": {
+      "artifactName": "Ntodo.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ntodo",
+      "artifactName": "Ntodo-Setup-${version}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1"
+  }
+}

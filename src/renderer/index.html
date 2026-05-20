@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ntodo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="titlebar">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <h1>Ntodo</h1>
+            <p id="todayText"></p>
+          </div>
+        </div>
+        <div class="window-actions">
+          <button id="pinButton" class="icon-button active" title="始终置顶">⌖</button>
+          <button id="minButton" class="icon-button" title="最小化">−</button>
+          <button id="closeButton" class="icon-button danger" title="关闭">×</button>
+        </div>
+      </header>
+
+      <section class="quick-add">
+        <input id="taskInput" type="text" placeholder="添加现在要做的事" maxlength="120" />
+        <div class="priority-picker" aria-label="优先级">
+          <button class="priority-option high active" type="button" data-priority="3">高</button>
+          <button class="priority-option medium" type="button" data-priority="2">中</button>
+          <button class="priority-option low" type="button" data-priority="1">低</button>
+        </div>
+        <button id="addTaskButton" class="primary-button">添加</button>
+      </section>
+
+      <section class="toolbar">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-view="active">待完成</button>
+          <button class="tab" data-view="completed">已完成</button>
+        </div>
+        <button id="screenshotButton" class="ghost-button" title="从截图创建待整理任务">截图</button>
+      </section>
+
+      <section id="encourage" class="encourage" hidden></section>
+
+      <section id="activeView" class="task-list"></section>
+      <section id="completedView" class="task-list completed-list" hidden></section>
+    </main>
+
+    <section id="onboarding" class="onboarding" hidden>
+      <div class="guide-card">
+        <div class="guide-kicker">第一次使用</div>
+        <h2>把它放在右上角，别让任务占满注意力。</h2>
+        <p>添加任务、选择优先级。高优先级会自动排在前面；点任务右侧加号可以添加子项目；完成后会进入已完成记录。</p>
+        <button id="guideDoneButton">知道了</button>
+      </div>
+    </section>
+
+    <template id="taskTemplate">
+      <article class="task-item">
+        <div class="task-row">
+          <input class="task-check" type="checkbox" />
+          <div class="task-main">
+            <div class="task-title"></div>
+            <div class="task-meta"></div>
+          </div>
+          <button class="small-button delete-task" title="删除任务">⌫</button>
+          <button class="small-button subtask-toggle" title="添加子项目">＋</button>
+        </div>
+        <form class="subtask-form" hidden>
+          <input type="text" placeholder="添加子项目" maxlength="100" />
+          <button>加入</button>
+        </form>
+        <div class="subtasks"></div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
