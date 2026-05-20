@@ -52,11 +52,13 @@ npm run dist:portable
 npm run dist:installer
 ```
 
-安装包会输出到：
+安装包会输出到同一个 `release` 目录：
 
 ```text
-installer\Ntodo-Setup-0.1.0.exe
+release\Ntodo-Setup-0.1.0.exe
 ```
+
+如果旧版 Ntodo 正在运行，构建脚本会停止并提示先从托盘菜单退出旧版应用。
 
 ## 当前功能
 
