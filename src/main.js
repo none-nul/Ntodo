@@ -9,6 +9,8 @@ let mainWindow;
 let tray;
 let isQuitting = false;
 
+app.setAppUserModelId('com.ntodo.desktop');
+
 function getStorePath() {
   return path.join(app.getPath('userData'), 'tasks.json');
 }

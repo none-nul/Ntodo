@@ -23,15 +23,15 @@
         </div>
       </header>
 
-      <section class="quick-add">
+      <form id="quickAddForm" class="quick-add">
         <input id="taskInput" type="text" placeholder="添加现在要做的事" maxlength="120" />
         <div class="priority-picker" aria-label="优先级">
           <button class="priority-option high active" type="button" data-priority="3">高</button>
           <button class="priority-option medium" type="button" data-priority="2">中</button>
           <button class="priority-option low" type="button" data-priority="1">低</button>
         </div>
-        <button id="addTaskButton" class="primary-button">添加</button>
-      </section>
+        <button id="addTaskButton" class="primary-button" type="submit">添加</button>
+      </form>
 
       <section class="toolbar">
         <div class="tabs" role="tablist">

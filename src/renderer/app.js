@@ -90,7 +90,7 @@ function showEncouragement() {
 function renderSubtasks(container, task, readOnly = false) {
   container.textContent = '';
   task.subtasks.forEach((subtask) => {
-    const row = document.createElement('label');
+    const row = document.createElement('div');
     row.className = `subtask${subtask.done ? ' done' : ''}`;
 
     const checkbox = document.createElement('input');
@@ -107,6 +107,21 @@ function renderSubtasks(container, task, readOnly = false) {
     label.textContent = subtask.title;
 
     row.append(checkbox, label);
+
+    if (!readOnly) {
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'subtask-delete';
+      deleteButton.title = '删除子项目';
+      deleteButton.textContent = '⌫';
+      deleteButton.addEventListener('click', async () => {
+        task.subtasks = task.subtasks.filter((item) => item.id !== subtask.id);
+        await persist();
+        render();
+      });
+      row.append(deleteButton);
+    }
+
     container.append(row);
   });
 }
@@ -269,17 +284,12 @@ function bindEvents() {
     day: 'numeric'
   }).format(new Date());
 
-  $('#addTaskButton').addEventListener('click', async () => {
+  $('#quickAddForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
     const input = $('#taskInput');
     await addTask(input.value);
     input.value = '';
     input.focus();
-  });
-
-  $('#taskInput').addEventListener('keydown', async (event) => {
-    if (event.key !== 'Enter') return;
-    await addTask(event.currentTarget.value);
-    event.currentTarget.value = '';
   });
 
   document.querySelectorAll('.priority-option').forEach((button) => {
