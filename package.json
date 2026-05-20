@@ -32,6 +32,7 @@
     ],
     "win": {
       "icon": "assets/ntodo.ico",
+      "signAndEditExecutable": false,
       "target": "dir"
     },
     "portable": {

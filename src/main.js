@@ -9,6 +9,7 @@ let mainWindow;
 let tray;
 let isQuitting = false;
 
+app.setName('Ntodo');
 app.setAppUserModelId('com.ntodo.desktop');
 
 function getStorePath() {
@@ -82,6 +83,7 @@ function createWindow() {
     minHeight: 380,
     frame: false,
     transparent: true,
+    hasShadow: false,
     resizable: true,
     skipTaskbar: false,
     alwaysOnTop: true,
