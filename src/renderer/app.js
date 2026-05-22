@@ -3,7 +3,11 @@ const state = {
   completed: [],
   view: 'active',
   pinned: true,
-  priority: 3
+  priority: 3,
+  settings: {
+    idleOpacity: 0.72,
+    openAtLogin: false
+  }
 };
 
 const encouragements = [
@@ -73,8 +77,18 @@ function sortedTasks() {
 async function persist() {
   await window.ntodo.writeStore({
     tasks: state.tasks,
-    completed: state.completed
+    completed: state.completed,
+    settings: state.settings
   });
+}
+
+function applySettings() {
+  const opacity = Math.min(0.95, Math.max(0.35, Number(state.settings.idleOpacity) || 0.72));
+  document.documentElement.style.setProperty('--shell-idle-opacity', opacity.toString());
+  document.documentElement.style.setProperty('--shell-idle-bottom-opacity', Math.max(0.35, opacity - 0.06).toString());
+  $('#idleOpacityRange').value = Math.round(opacity * 100).toString();
+  $('#idleOpacityValue').textContent = `${Math.round(opacity * 100)}%`;
+  $('#openAtLoginToggle').checked = Boolean(state.settings.openAtLogin);
 }
 
 function showEncouragement() {
@@ -308,6 +322,35 @@ function bindEvents() {
     });
   });
 
+  $('#settingsButton').addEventListener('click', () => {
+    $('#settingsPanel').hidden = false;
+  });
+
+  $('#settingsCloseButton').addEventListener('click', () => {
+    $('#settingsPanel').hidden = true;
+  });
+
+  $('#settingsPanel').addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) {
+      $('#settingsPanel').hidden = true;
+    }
+  });
+
+  $('#idleOpacityRange').addEventListener('input', async (event) => {
+    state.settings.idleOpacity = Number(event.currentTarget.value) / 100;
+    applySettings();
+    await persist();
+  });
+
+  $('#openAtLoginToggle').addEventListener('change', async (event) => {
+    const enabled = event.currentTarget.checked;
+    state.settings.openAtLogin = enabled;
+    const loginSettings = await window.ntodo.setOpenAtLogin(enabled);
+    state.settings.openAtLogin = Boolean(loginSettings.openAtLogin);
+    applySettings();
+    await persist();
+  });
+
   $('#guideDoneButton').addEventListener('click', () => {
     localStorage.setItem('ntodo:onboarding-seen', '1');
     $('#onboarding').hidden = true;
@@ -328,6 +371,17 @@ async function boot() {
   const stored = await window.ntodo.readStore();
   state.tasks = Array.isArray(stored.tasks) ? stored.tasks : [];
   state.completed = Array.isArray(stored.completed) ? stored.completed : [];
+  state.settings = {
+    ...state.settings,
+    ...(stored && typeof stored.settings === 'object' ? stored.settings : {})
+  };
+  try {
+    const loginSettings = await window.ntodo.getLoginItemSettings();
+    state.settings.openAtLogin = Boolean(loginSettings.openAtLogin);
+  } catch {
+    state.settings.openAtLogin = false;
+  }
+  applySettings();
   render();
   showOnboardingIfNeeded();
 }

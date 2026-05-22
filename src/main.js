@@ -138,6 +138,15 @@ ipcMain.handle('window:pin', (_event, pinned) => {
   return Boolean(pinned);
 });
 
+ipcMain.handle('settings:get-login-item', () => app.getLoginItemSettings());
+ipcMain.handle('settings:set-open-at-login', (_event, openAtLogin) => {
+  app.setLoginItemSettings({
+    openAtLogin: Boolean(openAtLogin),
+    path: process.execPath
+  });
+  return app.getLoginItemSettings();
+});
+
 ipcMain.handle('screenshot:pick', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择一张截图',

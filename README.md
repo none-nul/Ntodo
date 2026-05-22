@@ -40,6 +40,18 @@ npm run dist
 - 输出快速启动版本到 `release\win-unpacked\Ntodo.exe`。
 - 生成快捷方式 `release\Ntodo-fast-start.lnk`。
 
+开发测试最新源代码时，可以先不生成安装包，运行：
+
+```bash
+npm start
+```
+
+或者在刷新 `release\win-unpacked\resources\app.asar` 后，直接打开：
+
+```text
+release\win-unpacked\Ntodo.exe
+```
+
 如果确实需要单文件 portable 版本，可以运行：
 
 ```bash
@@ -72,6 +84,7 @@ release\Ntodo-Setup-当前版本号.exe
 - 每个任务可添加子项目并单独勾选。
 - 勾选完成后显示删除线、渐隐消失，并显示一条鼓励提示。
 - 已完成页保留完成时间、优先级和子项目完成情况。
+- 设置面板支持开机自启和空闲不透明度调整。
 - 截图添加入口会把选择的截图保存为一条高优先级“待整理”任务。
 
 ## 后续扩展点

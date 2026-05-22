@@ -18,6 +18,7 @@
         </div>
         <div class="window-actions">
           <button id="pinButton" class="icon-button active" title="始终置顶">⌖</button>
+          <button id="settingsButton" class="icon-button" title="设置">⚙</button>
           <button id="minButton" class="icon-button" title="最小化">−</button>
           <button id="closeButton" class="icon-button danger" title="关闭">×</button>
         </div>
@@ -53,6 +54,39 @@
         <h2>把它放在右上角，别让任务占满注意力。</h2>
         <p>添加任务、选择优先级。高优先级会自动排在前面；点任务右侧加号可以添加子项目；完成后会进入已完成记录。</p>
         <button id="guideDoneButton">知道了</button>
+      </div>
+    </section>
+
+    <section id="settingsPanel" class="settings-panel" hidden>
+      <div class="settings-card">
+        <header class="settings-head">
+          <div>
+            <div class="guide-kicker">设置</div>
+            <h2>Ntodo 偏好</h2>
+          </div>
+          <button id="settingsCloseButton" class="icon-button" title="关闭设置">×</button>
+        </header>
+
+        <label class="setting-row">
+          <span>
+            <strong>开机自动启动</strong>
+            <small>安装版生效，开发模式可能受系统限制。</small>
+          </span>
+          <input id="openAtLoginToggle" type="checkbox" />
+        </label>
+
+        <label class="setting-column">
+          <span>
+            <strong>空闲不透明度</strong>
+            <small>鼠标不在窗口上时的背景清晰程度。</small>
+          </span>
+          <div class="range-row">
+            <input id="idleOpacityRange" type="range" min="35" max="95" step="5" />
+            <output id="idleOpacityValue"></output>
+          </div>
+        </label>
+
+        <div class="settings-note">账号与同步功能会放在这里扩展。</div>
       </div>
     </section>
 

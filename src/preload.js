@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('ntodo', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   close: () => ipcRenderer.invoke('window:close'),
   setPinned: (pinned) => ipcRenderer.invoke('window:pin', pinned),
+  getLoginItemSettings: () => ipcRenderer.invoke('settings:get-login-item'),
+  setOpenAtLogin: (openAtLogin) => ipcRenderer.invoke('settings:set-open-at-login', openAtLogin),
   pickScreenshot: () => ipcRenderer.invoke('screenshot:pick'),
   getScreenshotSources: () => ipcRenderer.invoke('screenshot:sources')
 });
