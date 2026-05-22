@@ -282,6 +282,7 @@ h1 {
 }
 
 .task-row,
+.task-actions,
 .subtask-form,
 .subtasks {
   position: relative;
@@ -310,7 +311,7 @@ h1 {
 
 .task-row {
   display: grid;
-  grid-template-columns: 20px 1fr 28px 28px;
+  grid-template-columns: 20px 1fr;
   gap: 8px;
   align-items: start;
 }
@@ -400,6 +401,12 @@ h1 {
   font-size: 10px;
 }
 
+.task-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .priority-chip {
   display: inline-flex;
   align-items: center;
@@ -420,8 +427,8 @@ h1 {
 }
 
 .small-button {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: 1px solid rgba(52, 45, 34, 0.12);
   border-radius: 9px;
   background: #fffdf7;

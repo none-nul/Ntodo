@@ -76,6 +76,16 @@ function getDueCountdown(dueDate) {
   return { value: `${Math.abs(diffDays)}天`, caption: '已超', overdue: true };
 }
 
+function getDueSortValue(task) {
+  if (!task.dueDate) return Number.POSITIVE_INFINITY;
+  const due = new Date(`${task.dueDate}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return Number.POSITIVE_INFINITY;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
+}
+
 function getPriority(priority) {
   return priorityConfig[Number(priority)] || priorityConfig[2];
 }
@@ -83,6 +93,8 @@ function getPriority(priority) {
 function sortedTasks() {
   return [...state.tasks].sort((a, b) => {
     if (b.priority !== a.priority) return b.priority - a.priority;
+    const dueDelta = getDueSortValue(a) - getDueSortValue(b);
+    if (dueDelta !== 0) return dueDelta;
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
 }
