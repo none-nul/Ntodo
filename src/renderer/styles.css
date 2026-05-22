@@ -530,11 +530,6 @@ h1 {
   text-align: right;
 }
 
-.settings-note {
-  margin-top: 4px;
-  color: #776d5c;
-  font-size: 11px;
-}
 
 .onboarding[hidden] {
   display: none;

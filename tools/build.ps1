@@ -43,6 +43,11 @@ if ($LASTEXITCODE -ne 0) {
 
 $fastExe = Join-Path $outputDir "win-unpacked\Ntodo.exe"
 if (Test-Path $fastExe) {
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $root "tools\patch-icon.ps1") -ExePath $fastExe
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
+
   $shortcutPath = Join-Path $outputDir "Ntodo-fast-start.lnk"
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $shell.CreateShortcut($shortcutPath)
