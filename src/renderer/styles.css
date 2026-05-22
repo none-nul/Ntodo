@@ -270,6 +270,8 @@ h1 {
 
 .task-item {
   --priority-color: #d59a21;
+  position: relative;
+  overflow: hidden;
   border: 1px solid rgba(52, 45, 34, 0.12);
   border-left: 4px solid var(--priority-color);
   border-radius: 9px;
@@ -277,6 +279,13 @@ h1 {
   margin-bottom: 8px;
   padding: 9px;
   transition: opacity 420ms ease, transform 420ms ease, max-height 420ms ease, margin 420ms ease;
+}
+
+.task-row,
+.subtask-form,
+.subtasks {
+  position: relative;
+  z-index: 1;
 }
 
 .task-item.priority-high {
@@ -331,31 +340,48 @@ h1 {
   overflow-wrap: anywhere;
 }
 
-.due-badge {
-  position: relative;
-  flex: 0 0 auto;
-  max-width: 64px;
-  overflow: hidden;
-  border: 1px solid rgba(80, 76, 69, 0.1);
-  border-radius: 999px;
-  padding: 2px 8px;
-  background: rgba(85, 82, 76, 0.12);
-  color: rgba(64, 60, 54, 0.58);
-  font-size: 10px;
-  line-height: 1.25;
-  white-space: nowrap;
+.due-watermark {
+  position: absolute;
+  right: -8px;
+  bottom: -9px;
+  z-index: 0;
+  display: grid;
+  justify-items: end;
+  pointer-events: none;
+  color: rgba(63, 60, 56, 0.24);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0;
+  transform: rotate(-2deg);
 }
 
-.due-badge::after {
+.due-watermark strong {
+  max-width: 96px;
+  overflow: hidden;
+  font-size: 36px;
+  line-height: 0.82;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.due-watermark span {
+  margin-right: 16px;
+  margin-top: 2px;
+  color: rgba(63, 60, 56, 0.34);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.due-watermark::after {
   content: "";
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 36%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, rgba(255, 253, 248, 0), rgba(255, 253, 248, 0.62));
-  pointer-events: none;
+  inset: -4px -2px -4px 46%;
+  background: linear-gradient(90deg, rgba(255, 253, 248, 0), rgba(255, 253, 248, 0.68));
+}
+
+.due-watermark.overdue {
+  color: rgba(105, 58, 52, 0.25);
 }
 
 .task-item.done .task-title,

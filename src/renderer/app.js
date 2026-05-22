@@ -63,17 +63,17 @@ function formatDuration(startIso, endIso) {
   return parts.join(' ');
 }
 
-function formatDueBadge(dueDate) {
-  if (!dueDate) return '';
+function getDueCountdown(dueDate) {
+  if (!dueDate) return null;
   const due = new Date(`${dueDate}T00:00:00`);
-  if (Number.isNaN(due.getTime())) return '';
+  if (Number.isNaN(due.getTime())) return null;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.ceil((due.getTime() - today.getTime()) / 86400000);
-  if (diffDays === 0) return '今天';
-  if (diffDays > 0) return `剩 ${diffDays} 天`;
-  return `超 ${Math.abs(diffDays)} 天`;
+  if (diffDays === 0) return { value: '今天', caption: dueDate, overdue: false };
+  if (diffDays > 0) return { value: `${diffDays}天`, caption: '剩余', overdue: false };
+  return { value: `${Math.abs(diffDays)}天`, caption: '已超', overdue: true };
 }
 
 function getPriority(priority) {
@@ -202,12 +202,19 @@ function renderTask(task) {
   titleText.textContent = task.title;
   title.append(titleText);
 
-  const dueLabel = formatDueBadge(task.dueDate);
-  if (dueLabel) {
-    const dueBadge = document.createElement('span');
-    dueBadge.className = 'due-badge';
-    dueBadge.textContent = dueLabel;
-    title.append(dueBadge);
+  const dueCountdown = getDueCountdown(task.dueDate);
+  if (dueCountdown) {
+    const watermark = document.createElement('div');
+    watermark.className = `due-watermark${dueCountdown.overdue ? ' overdue' : ''}`;
+
+    const value = document.createElement('strong');
+    value.textContent = dueCountdown.value;
+
+    const caption = document.createElement('span');
+    caption.textContent = dueCountdown.caption;
+
+    watermark.append(value, caption);
+    item.append(watermark);
   }
 
   renderMeta(meta, task);
