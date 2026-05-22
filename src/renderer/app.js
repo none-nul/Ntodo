@@ -63,6 +63,19 @@ function formatDuration(startIso, endIso) {
   return parts.join(' ');
 }
 
+function formatDueBadge(dueDate) {
+  if (!dueDate) return '';
+  const due = new Date(`${dueDate}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return '';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+  if (diffDays === 0) return '今天';
+  if (diffDays > 0) return `剩 ${diffDays} 天`;
+  return `超 ${Math.abs(diffDays)} 天`;
+}
+
 function getPriority(priority) {
   return priorityConfig[Number(priority)] || priorityConfig[2];
 }
@@ -183,7 +196,20 @@ function renderTask(task) {
   const subtaskInput = subtaskForm.querySelector('input');
   const subtasks = item.querySelector('.subtasks');
 
-  title.textContent = task.title;
+  title.textContent = '';
+  const titleText = document.createElement('span');
+  titleText.className = 'task-title-text';
+  titleText.textContent = task.title;
+  title.append(titleText);
+
+  const dueLabel = formatDueBadge(task.dueDate);
+  if (dueLabel) {
+    const dueBadge = document.createElement('span');
+    dueBadge.className = 'due-badge';
+    dueBadge.textContent = dueLabel;
+    title.append(dueBadge);
+  }
+
   renderMeta(meta, task);
   renderSubtasks(subtasks, task);
 
@@ -238,7 +264,7 @@ function render() {
   });
 }
 
-async function addTask(title, priority = state.priority, source = 'manual') {
+async function addTask(title, priority = state.priority, source = 'manual', dueDate = '') {
   const cleanTitle = title.trim();
   if (!cleanTitle) return;
   state.tasks.push({
@@ -246,6 +272,7 @@ async function addTask(title, priority = state.priority, source = 'manual') {
     title: cleanTitle,
     priority,
     source,
+    dueDate: dueDate || '',
     createdAt: nowIso(),
     subtasks: []
   });
@@ -301,8 +328,10 @@ function bindEvents() {
   $('#quickAddForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = $('#taskInput');
-    await addTask(input.value);
+    const dueDateInput = $('#dueDateInput');
+    await addTask(input.value, state.priority, 'manual', dueDateInput.value);
     input.value = '';
+    dueDateInput.value = '';
     input.focus();
   });
 
