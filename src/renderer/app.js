@@ -2,15 +2,28 @@ const state = {
   tasks: [],
   completed: [],
   view: 'active',
+  addMode: 'manual',
   pinned: true,
   priority: 3,
   settings: {
     idleOpacity: 0.72,
-    openAtLogin: false
+    openAtLogin: false,
+    autoCompleteParentOnSubtasksDone: true,
+    openaiApiKey: '',
+    openaiBaseUrl: 'https://api.openai.com/v1',
+    openaiModel: 'gpt-4o-mini'
   }
 };
 
-const encouragements = [
+const addEncouragements = [
+  '已记下，下一步更清楚了。',
+  '先放进列表，等会儿就能处理。',
+  '任务已安排，心里少占一点。',
+  '记录好了，按节奏来就行。',
+  '这件事已经归位。'
+];
+
+const completeEncouragements = [
   '完成得很稳，继续推进下一件。',
   '这一项已经收尾，节奏不错。',
   '任务清掉了，给自己一点正反馈。',
@@ -114,16 +127,74 @@ function applySettings() {
   $('#idleOpacityRange').value = Math.round(opacity * 100).toString();
   $('#idleOpacityValue').textContent = `${Math.round(opacity * 100)}%`;
   $('#openAtLoginToggle').checked = Boolean(state.settings.openAtLogin);
+  $('#openaiApiKeyInput').value = state.settings.openaiApiKey || '';
+  $('#openaiBaseUrlInput').value = state.settings.openaiBaseUrl || 'https://api.openai.com/v1';
+  $('#openaiModelInput').value = state.settings.openaiModel || 'gpt-4o-mini';
+  $('#autoCompleteParentToggle').checked = Boolean(state.settings.autoCompleteParentOnSubtasksDone);
 }
 
-function showEncouragement() {
+function applyAddMode() {
+  const isAiMode = state.addMode === 'ai';
+  $('.manual-controls').hidden = isAiMode;
+  $('.ai-controls').hidden = !isAiMode;
+  $('#taskInput').placeholder = isAiMode
+    ? '例如：明天一定要交英语作文，分成查资料、写初稿、修改'
+    : '添加现在要做的事';
+  document.querySelectorAll('.add-mode-option').forEach((button) => {
+    button.classList.toggle('active', button.dataset.mode === state.addMode);
+  });
+  focusTaskInput(false);
+}
+
+function showEncouragement(eventType = 'complete', message = '') {
   const box = $('#encourage');
-  box.textContent = encouragements[Math.floor(Math.random() * encouragements.length)];
+  const fallback = eventType === 'add' ? addEncouragements : completeEncouragements;
+  box.textContent = message || fallback[Math.floor(Math.random() * fallback.length)];
   box.hidden = false;
   window.clearTimeout(showEncouragement.timer);
   showEncouragement.timer = window.setTimeout(() => {
     box.hidden = true;
   }, 2600);
+}
+
+function showTaskFeedback(eventType) {
+  showEncouragement(eventType);
+}
+
+function focusTaskInput(selectText = true) {
+  window.setTimeout(() => {
+    const input = $('#taskInput');
+    window.focus();
+    input.focus();
+    if (selectText) input.select();
+  }, 40);
+}
+
+function showAiError(message) {
+  const box = $('#aiError');
+  box.textContent = message;
+  box.hidden = false;
+  window.clearTimeout(showAiError.timer);
+  showAiError.timer = window.setTimeout(() => {
+    box.hidden = true;
+  }, 5200);
+}
+
+function createTrashIcon() {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(namespace, 'svg');
+  svg.setAttribute('class', 'action-icon');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+
+  const lid = document.createElementNS(namespace, 'path');
+  lid.setAttribute('d', 'M7 8h10M10 8V6h4v2M9 10v7M15 10v7');
+
+  const bin = document.createElementNS(namespace, 'path');
+  bin.setAttribute('d', 'M8 8l1 11h6l1-11');
+
+  svg.append(lid, bin);
+  return svg;
 }
 
 function renderSubtasks(container, task, readOnly = false) {
@@ -138,6 +209,15 @@ function renderSubtasks(container, task, readOnly = false) {
     checkbox.disabled = readOnly;
     checkbox.addEventListener('change', async () => {
       subtask.done = checkbox.checked;
+      const shouldCompleteParent =
+        !readOnly &&
+        state.settings.autoCompleteParentOnSubtasksDone &&
+        task.subtasks.length > 0 &&
+        task.subtasks.every((item) => item.done);
+      if (shouldCompleteParent) {
+        await completeTask(task.id);
+        return;
+      }
       await persist();
       render();
     });
@@ -151,8 +231,9 @@ function renderSubtasks(container, task, readOnly = false) {
       const deleteButton = document.createElement('button');
       deleteButton.type = 'button';
       deleteButton.className = 'subtask-delete';
+      deleteButton.setAttribute('aria-label', '删除子项目');
       deleteButton.title = '删除子项目';
-      deleteButton.textContent = '⌫';
+      deleteButton.append(createTrashIcon());
       deleteButton.addEventListener('click', async () => {
         task.subtasks = task.subtasks.filter((item) => item.id !== subtask.id);
         await persist();
@@ -203,6 +284,10 @@ function renderTask(task) {
   const title = item.querySelector('.task-title');
   const meta = item.querySelector('.task-meta');
   const deleteButton = item.querySelector('.delete-task');
+  const dueButton = item.querySelector('.due-toggle');
+  const dueForm = item.querySelector('.due-date-form');
+  const dueInput = dueForm.querySelector('input');
+  const clearDueButton = dueForm.querySelector('.clear-due');
   const subtaskButton = item.querySelector('.subtask-toggle');
   const subtaskForm = item.querySelector('.subtask-form');
   const subtaskInput = subtaskForm.querySelector('input');
@@ -231,12 +316,37 @@ function renderTask(task) {
 
   renderMeta(meta, task);
   renderSubtasks(subtasks, task);
+  dueInput.value = task.dueDate || '';
+  dueButton.classList.toggle('has-due', Boolean(task.dueDate));
 
   checkbox.addEventListener('change', () => completeTask(task.id, item));
   deleteButton.addEventListener('click', () => deleteActiveTask(task.id));
+  dueButton.addEventListener('click', () => {
+    dueForm.hidden = !dueForm.hidden;
+    if (!dueForm.hidden) {
+      dueInput.value = task.dueDate || '';
+      dueInput.focus();
+    }
+  });
   subtaskButton.addEventListener('click', () => {
     subtaskForm.hidden = !subtaskForm.hidden;
     if (!subtaskForm.hidden) subtaskInput.focus();
+  });
+
+  dueForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    task.dueDate = dueInput.value || '';
+    dueForm.hidden = true;
+    await persist();
+    render();
+  });
+
+  clearDueButton.addEventListener('click', async () => {
+    task.dueDate = '';
+    dueInput.value = '';
+    dueForm.hidden = true;
+    await persist();
+    render();
   });
 
   subtaskForm.addEventListener('submit', async (event) => {
@@ -261,6 +371,8 @@ function renderCompletedTask(task) {
   item.querySelector('.task-title').textContent = task.title;
   renderMeta(item.querySelector('.task-meta'), task, true);
   item.querySelector('.delete-task').addEventListener('click', () => deleteCompletedTask(task.id));
+  item.querySelector('.due-toggle').remove();
+  item.querySelector('.due-date-form').remove();
   item.querySelector('.subtask-toggle').remove();
   item.querySelector('.subtask-form').remove();
   renderSubtasks(item.querySelector('.subtasks'), task, true);
@@ -283,34 +395,47 @@ function render() {
   });
 }
 
-async function addTask(title, priority = state.priority, source = 'manual', dueDate = '') {
+async function addTask(title, priority = state.priority, source = 'manual', dueDate = '', subtasks = []) {
   const cleanTitle = title.trim();
   if (!cleanTitle) return;
-  state.tasks.push({
+  const task = {
     id: uid(),
     title: cleanTitle,
     priority,
     source,
     dueDate: dueDate || '',
     createdAt: nowIso(),
-    subtasks: []
-  });
+    subtasks: subtasks.map((subtask) => ({
+      id: uid(),
+      title: String(subtask || '').trim(),
+      done: false,
+      createdAt: nowIso()
+    })).filter((subtask) => subtask.title)
+  };
+  state.tasks.push(task);
   await persist();
   render();
+  showTaskFeedback('add', task);
 }
 
-async function completeTask(id, element) {
+async function completeTask(id, element = null) {
   const index = state.tasks.findIndex((task) => task.id === id);
   if (index === -1) return;
   const [task] = state.tasks.splice(index, 1);
   task.completedAt = nowIso();
   task.subtasks = task.subtasks.map((subtask) => ({ ...subtask, done: true }));
   state.completed.push(task);
-  element.classList.add('done');
-  element.classList.add('vanishing');
-  showEncouragement();
+  if (element) {
+    element.classList.add('done');
+    element.classList.add('vanishing');
+  }
   await persist();
-  window.setTimeout(render, 430);
+  showTaskFeedback('complete', task);
+  if (element) {
+    window.setTimeout(render, 430);
+  } else {
+    render();
+  }
 }
 
 async function deleteActiveTask(id) {
@@ -332,6 +457,52 @@ async function addScreenshotTask() {
   await addTask(`整理截图中的事项：${filename}`, 3, 'screenshot');
 }
 
+async function addAiTasks() {
+  const input = $('#taskInput');
+  const button = $('#aiAddButton');
+  const text = input.value.trim();
+  if (!text) {
+    input.focus();
+    return;
+  }
+
+  button.disabled = true;
+  const previousText = button.textContent;
+  button.textContent = '...';
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = await window.ntodo.parseNaturalTask({
+      text,
+      today,
+      existingTasks: sortedTasks().slice(0, 12).map((task) => ({
+        title: task.title,
+        priority: task.priority,
+        dueDate: task.dueDate || '',
+        subtaskCount: task.subtasks.length
+      })),
+      settings: state.settings
+    });
+    const tasks = Array.isArray(result.tasks) ? result.tasks : [];
+    if (tasks.length === 0) throw new Error('没有解析到任务');
+
+    for (const task of tasks) {
+      await addTask(task.title, task.priority, 'ai', task.dueDate, task.subtasks);
+    }
+
+    input.value = '';
+    $('#dueDateInput').value = '';
+    $('#aiError').hidden = true;
+    focusTaskInput();
+  } catch (error) {
+    showAiError(error.message || 'AI 添加失败');
+    focusTaskInput();
+  } finally {
+    button.disabled = false;
+    button.textContent = previousText;
+  }
+}
+
 function showOnboardingIfNeeded() {
   if (localStorage.getItem('ntodo:onboarding-seen')) return;
   $('#onboarding').hidden = false;
@@ -346,12 +517,23 @@ function bindEvents() {
 
   $('#quickAddForm').addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (state.addMode === 'ai') {
+      await addAiTasks();
+      return;
+    }
     const input = $('#taskInput');
     const dueDateInput = $('#dueDateInput');
     await addTask(input.value, state.priority, 'manual', dueDateInput.value);
     input.value = '';
     dueDateInput.value = '';
     input.focus();
+  });
+
+  document.querySelectorAll('.add-mode-option').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.addMode = button.dataset.mode;
+      applyAddMode();
+    });
   });
 
   document.querySelectorAll('.priority-option').forEach((button) => {
@@ -367,6 +549,18 @@ function bindEvents() {
     tab.addEventListener('click', () => {
       state.view = tab.dataset.view;
       render();
+    });
+  });
+
+  document.querySelectorAll('.settings-menu-item').forEach((button) => {
+    button.addEventListener('click', () => {
+      const section = button.dataset.settingsSection;
+      document.querySelectorAll('.settings-menu-item').forEach((item) => {
+        item.classList.toggle('active', item === button);
+      });
+      document.querySelectorAll('.settings-section').forEach((panel) => {
+        panel.classList.toggle('active', panel.dataset.settingsSection === section);
+      });
     });
   });
 
@@ -399,12 +593,36 @@ function bindEvents() {
     await persist();
   });
 
+  $('#autoCompleteParentToggle').addEventListener('change', async (event) => {
+    state.settings.autoCompleteParentOnSubtasksDone = event.currentTarget.checked;
+    applySettings();
+    await persist();
+  });
+
+  $('#openaiApiKeyInput').addEventListener('change', async (event) => {
+    state.settings.openaiApiKey = event.currentTarget.value.trim();
+    await persist();
+  });
+
+  $('#openaiBaseUrlInput').addEventListener('change', async (event) => {
+    state.settings.openaiBaseUrl = event.currentTarget.value.trim() || 'https://api.openai.com/v1';
+    applySettings();
+    await persist();
+  });
+
+  $('#openaiModelInput').addEventListener('change', async (event) => {
+    state.settings.openaiModel = event.currentTarget.value.trim() || 'gpt-4o-mini';
+    applySettings();
+    await persist();
+  });
+
   $('#guideDoneButton').addEventListener('click', () => {
     localStorage.setItem('ntodo:onboarding-seen', '1');
     $('#onboarding').hidden = true;
   });
 
   $('#screenshotButton').addEventListener('click', addScreenshotTask);
+  $('#aiAddButton').addEventListener('click', addAiTasks);
   $('#minButton').addEventListener('click', () => window.ntodo.minimize());
   $('#closeButton').addEventListener('click', () => window.ntodo.close());
   $('#pinButton').addEventListener('click', async () => {
@@ -430,6 +648,7 @@ async function boot() {
     state.settings.openAtLogin = false;
   }
   applySettings();
+  applyAddMode();
   render();
   showOnboardingIfNeeded();
 }

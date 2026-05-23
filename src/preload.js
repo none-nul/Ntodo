@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('ntodo', {
   setPinned: (pinned) => ipcRenderer.invoke('window:pin', pinned),
   getLoginItemSettings: () => ipcRenderer.invoke('settings:get-login-item'),
   setOpenAtLogin: (openAtLogin) => ipcRenderer.invoke('settings:set-open-at-login', openAtLogin),
+  parseNaturalTask: (payload) => ipcRenderer.invoke('ai:parse-task', payload),
   pickScreenshot: () => ipcRenderer.invoke('screenshot:pick'),
   getScreenshotSources: () => ipcRenderer.invoke('screenshot:sources')
 });

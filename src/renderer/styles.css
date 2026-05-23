@@ -103,10 +103,13 @@ h1 {
 .icon-button {
   width: 28px;
   height: 28px;
+  display: inline-grid;
+  place-items: center;
   border: 1px solid rgba(43, 37, 28, 0.14);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.68);
   color: #393229;
+  line-height: 1;
 }
 
 .icon-button.active {
@@ -119,15 +122,28 @@ h1 {
   color: #fff;
 }
 
+.title-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .quick-add {
   display: grid;
-  grid-template-columns: 1fr 94px 52px;
-  gap: 7px;
-  padding: 10px 11px 8px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 10px 11px 9px;
 }
 
 .quick-add input,
-.subtask-form input {
+.due-date-form input,
+.subtask-form input,
+.setting-input {
   min-width: 0;
   border: 1px solid rgba(52, 45, 34, 0.16);
   border-radius: 9px;
@@ -137,21 +153,62 @@ h1 {
 }
 
 .quick-add input {
-  height: 38px;
+  height: 40px;
   padding: 0 11px;
   font-size: 14px;
 }
 
-#taskInput {
-  grid-column: 1 / -1;
+.add-mode-switch {
+  width: max-content;
+  display: grid;
+  grid-template-columns: repeat(2, 48px);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(52, 45, 34, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.add-mode-option {
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #665c4b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.add-mode-option.active {
+  background: #1c7c68;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(28, 124, 104, 0.16);
 }
 
 .due-date-input {
   color: #776d5c;
 }
 
+.manual-controls {
+  display: grid;
+  grid-template-columns: 1fr 90px 58px;
+  gap: 7px;
+}
+
+.ai-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.manual-controls[hidden],
+.ai-controls[hidden] {
+  display: none;
+}
+
 .quick-add input:focus,
-.subtask-form input:focus {
+.due-date-form input:focus,
+.subtask-form input:focus,
+.setting-input:focus {
   border-color: rgba(28, 124, 104, 0.52);
   box-shadow: 0 0 0 3px rgba(28, 124, 104, 0.12);
 }
@@ -192,12 +249,24 @@ h1 {
 }
 
 .primary-button,
+.ai-button,
+.due-date-form button,
 .subtask-form button {
   border: 0;
   border-radius: 9px;
   background: #263f73;
   color: #fff;
   font-weight: 700;
+}
+
+.ai-button {
+  height: 38px;
+  background: #1c7c68;
+}
+
+.ai-button:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 .toolbar {
@@ -249,6 +318,17 @@ h1 {
   animation: fadeIn 180ms ease-out;
 }
 
+.ai-error {
+  margin: 0 11px 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(185, 67, 50, 0.1);
+  color: #8b3d32;
+  font-size: 12px;
+  line-height: 1.35;
+  animation: fadeIn 180ms ease-out;
+}
+
 .task-list {
   flex: 1;
   overflow: auto;
@@ -277,12 +357,13 @@ h1 {
   border-radius: 9px;
   background: #fffdf8;
   margin-bottom: 8px;
-  padding: 9px;
+  padding: 9px 9px 15px;
   transition: opacity 420ms ease, transform 420ms ease, max-height 420ms ease, margin 420ms ease;
 }
 
 .task-row,
 .task-actions,
+.due-date-form,
 .subtask-form,
 .subtasks {
   position: relative;
@@ -343,8 +424,8 @@ h1 {
 
 .due-watermark {
   position: absolute;
-  right: -8px;
-  bottom: -9px;
+  right: -5px;
+  bottom: 2px;
   z-index: 0;
   display: grid;
   justify-items: end;
@@ -359,19 +440,22 @@ h1 {
 .due-watermark strong {
   max-width: 96px;
   overflow: hidden;
-  font-size: 36px;
-  line-height: 0.82;
+  font-size: 34px;
+  line-height: 0.78;
   white-space: nowrap;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .due-watermark span {
-  margin-right: 16px;
-  margin-top: 2px;
-  color: rgba(63, 60, 56, 0.34);
+  position: relative;
+  z-index: 1;
+  margin-right: 18px;
+  margin-top: 0;
+  color: rgba(63, 60, 56, 0.5);
   font-size: 11px;
   font-style: normal;
   font-weight: 800;
+  line-height: 1;
 }
 
 .due-watermark::after {
@@ -427,18 +511,23 @@ h1 {
 }
 
 .small-button {
-  width: 26px;
-  height: 26px;
-  border: 1px solid rgba(52, 45, 34, 0.12);
-  border-radius: 9px;
-  background: #fffdf7;
-  color: #3e372e;
-  font-size: 15px;
+  width: 27px;
+  height: 27px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(64, 55, 42, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.72);
+  color: #4f473b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 .small-button:hover {
-  background: var(--priority-color);
-  color: #fff;
+  border-color: color-mix(in srgb, var(--priority-color) 40%, transparent);
+  background: color-mix(in srgb, var(--priority-color) 12%, #fffdf8);
+  color: var(--priority-color);
+  transform: translateY(-1px);
 }
 
 .delete-task {
@@ -446,6 +535,53 @@ h1 {
 }
 
 .delete-task:hover {
+  border-color: rgba(185, 67, 50, 0.3);
+  background: rgba(185, 67, 50, 0.1);
+  color: #b94332;
+}
+
+.due-toggle.has-due {
+  border-color: rgba(28, 124, 104, 0.38);
+  color: #1c7c68;
+}
+
+.action-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateZ(0);
+}
+
+.due-date-form {
+  display: grid;
+  grid-template-columns: 1fr 46px 30px;
+  gap: 7px;
+  margin: 9px 0 3px 28px;
+}
+
+.due-date-form[hidden] {
+  display: none;
+}
+
+.due-date-form input {
+  height: 34px;
+  padding: 0 10px;
+  color: #776d5c;
+  font-size: 13px;
+}
+
+.due-date-form .clear-due {
+  padding: 0;
+  background: rgba(255, 255, 255, 0.76);
+  color: #8b3d32;
+}
+
+.due-date-form .clear-due:hover {
   background: #b94332;
   color: #fff;
 }
@@ -484,18 +620,24 @@ h1 {
 }
 
 .subtask-delete {
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(185, 67, 50, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.64);
   color: #8b3d32;
-  font-size: 12px;
 }
 
 .subtask-delete:hover {
-  background: #b94332;
-  color: #fff;
+  background: rgba(185, 67, 50, 0.1);
+  color: #b94332;
+}
+
+.subtask-delete .action-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .completed-time {
@@ -527,7 +669,9 @@ h1 {
 }
 
 .settings-card {
-  width: min(300px, 100%);
+  width: min(314px, 100%);
+  max-height: calc(100vh - 72px);
+  overflow: auto;
   padding: 14px;
   border: 1px solid rgba(52, 45, 34, 0.13);
   border-radius: 12px;
@@ -543,6 +687,49 @@ h1 {
   margin-bottom: 12px;
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.settings-menu {
+  display: grid;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(52, 45, 34, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.settings-menu-item {
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #665c4b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-menu-item.active {
+  background: #2d2a24;
+  color: #fff;
+}
+
+.settings-sections {
+  min-width: 0;
+}
+
+.settings-section {
+  display: none;
+}
+
+.settings-section.active {
+  display: block;
+}
+
 .settings-head h2 {
   margin: 4px 0 0;
   font-size: 16px;
@@ -554,8 +741,14 @@ h1 {
 .setting-column {
   display: flex;
   gap: 12px;
-  padding: 11px 0;
-  border-top: 1px solid rgba(52, 45, 34, 0.1);
+  padding: 10px 0;
+  border-top: 1px solid rgba(52, 45, 34, 0.08);
+}
+
+.settings-section > .setting-row:first-child,
+.settings-section > .setting-column:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .setting-row {
@@ -604,6 +797,13 @@ h1 {
   color: #4f4638;
   font-size: 12px;
   text-align: right;
+}
+
+.setting-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 

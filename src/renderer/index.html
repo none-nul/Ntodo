@@ -17,22 +17,41 @@
           </div>
         </div>
         <div class="window-actions">
-          <button id="pinButton" class="icon-button active" title="始终置顶">⌖</button>
-          <button id="settingsButton" class="icon-button" title="设置">⚙</button>
+          <button id="pinButton" class="icon-button active" title="始终置顶" aria-label="始终置顶">
+            <svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 4h6M10 4l1 6-3 3h8l-3-3 1-6"></path>
+              <path d="M12 13v6"></path>
+            </svg>
+          </button>
+          <button id="settingsButton" class="icon-button" title="设置" aria-label="设置">
+            <svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4Z"></path>
+              <path d="M13.8 3.8h-3.6l-.5 2.1c-.5.2-1 .5-1.5.9l-2.1-.7-1.8 3.1 1.6 1.5a6.8 6.8 0 0 0 0 1.8l-1.6 1.5 1.8 3.1 2.1-.7c.5.4 1 .7 1.5.9l.5 2.1h3.6l.5-2.1c.5-.2 1-.5 1.5-.9l2.1.7 1.8-3.1-1.6-1.5a6.8 6.8 0 0 0 0-1.8l1.6-1.5-1.8-3.1-2.1.7c-.5-.4-1-.7-1.5-.9l-.5-2.1Z"></path>
+            </svg>
+          </button>
           <button id="minButton" class="icon-button" title="最小化">−</button>
           <button id="closeButton" class="icon-button danger" title="关闭">×</button>
         </div>
       </header>
 
       <form id="quickAddForm" class="quick-add">
-        <input id="taskInput" type="text" placeholder="添加现在要做的事" maxlength="120" />
-        <input id="dueDateInput" class="due-date-input" type="date" title="截止时间" />
-        <div class="priority-picker" aria-label="优先级">
-          <button class="priority-option high active" type="button" data-priority="3">高</button>
-          <button class="priority-option medium" type="button" data-priority="2">中</button>
-          <button class="priority-option low" type="button" data-priority="1">低</button>
+        <div class="add-mode-switch" aria-label="添加模式">
+          <button class="add-mode-option active" type="button" data-mode="manual">手动</button>
+          <button class="add-mode-option" type="button" data-mode="ai">AI</button>
         </div>
-        <button id="addTaskButton" class="primary-button" type="submit">添加</button>
+        <input id="taskInput" type="text" placeholder="添加现在要做的事" maxlength="160" />
+        <div class="manual-controls">
+          <input id="dueDateInput" class="due-date-input" type="date" title="截止时间" />
+          <div class="priority-picker" aria-label="优先级">
+            <button class="priority-option high active" type="button" data-priority="3">高</button>
+            <button class="priority-option medium" type="button" data-priority="2">中</button>
+            <button class="priority-option low" type="button" data-priority="1">低</button>
+          </div>
+          <button id="addTaskButton" class="primary-button" type="submit">添加</button>
+        </div>
+        <div class="ai-controls" hidden>
+          <button id="aiAddButton" class="ai-button" type="button">解析并添加</button>
+        </div>
       </form>
 
       <section class="toolbar">
@@ -44,6 +63,7 @@
       </section>
 
       <section id="encourage" class="encourage" hidden></section>
+      <section id="aiError" class="ai-error" hidden></section>
 
       <section id="activeView" class="task-list"></section>
       <section id="completedView" class="task-list completed-list" hidden></section>
@@ -68,24 +88,72 @@
           <button id="settingsCloseButton" class="icon-button" title="关闭设置">×</button>
         </header>
 
-        <label class="setting-row">
-          <span>
-            <strong>开机自动启动</strong>
-            <small>安装版生效，开发模式可能受系统限制。</small>
-          </span>
-          <input id="openAtLoginToggle" type="checkbox" />
-        </label>
+        <div class="settings-layout">
+          <nav class="settings-menu" aria-label="设置分类">
+            <button class="settings-menu-item active" type="button" data-settings-section="general">通用</button>
+            <button class="settings-menu-item" type="button" data-settings-section="tasks">任务</button>
+            <button class="settings-menu-item" type="button" data-settings-section="ai">AI</button>
+          </nav>
 
-        <label class="setting-column">
-          <span>
-            <strong>空闲不透明度</strong>
-            <small>鼠标不在窗口上时的背景清晰程度。</small>
-          </span>
-          <div class="range-row">
-            <input id="idleOpacityRange" type="range" min="35" max="95" step="5" />
-            <output id="idleOpacityValue"></output>
+          <div class="settings-sections">
+            <section class="settings-section active" data-settings-section="general">
+              <label class="setting-row">
+                <span>
+                  <strong>开机自动启动</strong>
+                  <small>安装版生效，开发模式可能受系统限制。</small>
+                </span>
+                <input id="openAtLoginToggle" type="checkbox" />
+              </label>
+
+              <label class="setting-column">
+                <span>
+                  <strong>空闲不透明度</strong>
+                  <small>鼠标不在窗口上时的背景清晰程度。</small>
+                </span>
+                <div class="range-row">
+                  <input id="idleOpacityRange" type="range" min="35" max="95" step="5" />
+                  <output id="idleOpacityValue"></output>
+                </div>
+              </label>
+            </section>
+
+            <section class="settings-section" data-settings-section="tasks">
+              <label class="setting-row">
+                <span>
+                  <strong>子任务完成后完成主任务</strong>
+                  <small>当一个任务的所有子项目都勾选完成时，自动把主任务移入已完成。</small>
+                </span>
+                <input id="autoCompleteParentToggle" type="checkbox" />
+              </label>
+            </section>
+
+            <section class="settings-section" data-settings-section="ai">
+              <label class="setting-column">
+                <span>
+                  <strong>OpenAI API Key</strong>
+                  <small>仅保存在本机配置里，用于自然语言添加任务。</small>
+                </span>
+                <input id="openaiApiKeyInput" class="setting-input" type="password" placeholder="sk-..." autocomplete="off" />
+              </label>
+
+              <label class="setting-column">
+                <span>
+                  <strong>OpenAI Base URL</strong>
+                  <small>填接口根地址，例如 https://api.deepseek.com 或 https://ai.tju.edu.cn/api/v3。</small>
+                </span>
+                <input id="openaiBaseUrlInput" class="setting-input" type="url" placeholder="https://api.openai.com/v1" />
+              </label>
+
+              <label class="setting-column">
+                <span>
+                  <strong>OpenAI Model</strong>
+                  <small>用于把自然语言解析成任务结构。</small>
+                </span>
+                <input id="openaiModelInput" class="setting-input" type="text" placeholder="gpt-4o-mini" />
+              </label>
+            </section>
           </div>
-        </label>
+        </div>
       </div>
     </section>
 
@@ -97,11 +165,32 @@
             <div class="task-title"></div>
             <div class="task-meta"></div>
             <div class="task-actions">
-              <button class="small-button subtask-toggle" title="添加子项目">＋</button>
-              <button class="small-button delete-task" title="删除任务">⌫</button>
+              <button class="small-button due-toggle" title="设置截止日期" aria-label="设置截止日期">
+                <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="6" width="14" height="13" rx="3"></rect>
+                  <path d="M8 4v4M16 4v4M5 10h14"></path>
+                  <path d="M9 14h1M14 14h1"></path>
+                </svg>
+              </button>
+              <button class="small-button subtask-toggle" title="添加子项目" aria-label="添加子项目">
+                <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 6v12M6 12h12"></path>
+                </svg>
+              </button>
+              <button class="small-button delete-task" title="删除任务" aria-label="删除任务">
+                <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 8h10M10 8V6h4v2M9 10v7M15 10v7"></path>
+                  <path d="M8 8l1 11h6l1-11"></path>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
+        <form class="due-date-form" hidden>
+          <input type="date" title="截止时间" />
+          <button type="submit">保存</button>
+          <button class="clear-due" type="button" title="清除截止时间">×</button>
+        </form>
         <form class="subtask-form" hidden>
           <input type="text" placeholder="添加子项目" maxlength="100" />
           <button>加入</button>
