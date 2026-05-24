@@ -29,8 +29,8 @@
               <path d="M13.8 3.8h-3.6l-.5 2.1c-.5.2-1 .5-1.5.9l-2.1-.7-1.8 3.1 1.6 1.5a6.8 6.8 0 0 0 0 1.8l-1.6 1.5 1.8 3.1 2.1-.7c.5.4 1 .7 1.5.9l.5 2.1h3.6l.5-2.1c.5-.2 1-.5 1.5-.9l2.1.7 1.8-3.1-1.6-1.5a6.8 6.8 0 0 0 0-1.8l1.6-1.5-1.8-3.1-2.1.7c-.5-.4-1-.7-1.5-.9l-.5-2.1Z"></path>
             </svg>
           </button>
-          <button id="minButton" class="icon-button" title="最小化">−</button>
-          <button id="closeButton" class="icon-button danger" title="关闭">×</button>
+          <button id="minButton" class="icon-button" title="最小化" aria-label="最小化">-</button>
+          <button id="closeButton" class="icon-button danger" title="关闭" aria-label="关闭">x</button>
         </div>
       </header>
 
@@ -39,7 +39,7 @@
           <button class="add-mode-option active" type="button" data-mode="manual">手动</button>
           <button class="add-mode-option" type="button" data-mode="ai">AI</button>
         </div>
-        <input id="taskInput" type="text" placeholder="添加现在要做的事" maxlength="160" />
+        <textarea id="taskInput" placeholder="添加现在要做的事" maxlength="260" rows="1"></textarea>
         <div class="manual-controls">
           <input id="dueDateInput" class="due-date-input" type="date" title="截止时间" />
           <div class="priority-picker" aria-label="优先级">
@@ -56,10 +56,9 @@
 
       <section class="toolbar">
         <div class="tabs" role="tablist">
-          <button class="tab active" data-view="active">待完成</button>
-          <button class="tab" data-view="completed">已完成</button>
+          <button class="tab active" type="button" data-view="active">待完成</button>
+          <button class="tab" type="button" data-view="completed">已完成</button>
         </div>
-        <button id="screenshotButton" class="ghost-button" title="从截图创建待整理任务">截图</button>
       </section>
 
       <section id="encourage" class="encourage" hidden></section>
@@ -74,7 +73,7 @@
         <div class="guide-kicker">第一次使用</div>
         <h2>把它放在右上角，别让任务占满注意力。</h2>
         <p>添加任务、选择优先级。高优先级会自动排在前面；点任务右侧加号可以添加子项目；完成后会进入已完成记录。</p>
-        <button id="guideDoneButton">知道了</button>
+        <button id="guideDoneButton" type="button">知道了</button>
       </div>
     </section>
 
@@ -85,7 +84,7 @@
             <div class="guide-kicker">设置</div>
             <h2>Ntodo 偏好</h2>
           </div>
-          <button id="settingsCloseButton" class="icon-button" title="关闭设置">×</button>
+          <button id="settingsCloseButton" class="icon-button" title="关闭设置" aria-label="关闭设置">x</button>
         </header>
 
         <div class="settings-layout">
@@ -107,12 +106,34 @@
 
               <label class="setting-column">
                 <span>
-                  <strong>空闲不透明度</strong>
-                  <small>鼠标不在窗口上时的背景清晰程度。</small>
+                  <strong>远离不透明度</strong>
+                  <small>光标完全不在附近时，窗口更淡并默认点击穿透。</small>
                 </span>
                 <div class="range-row">
-                  <input id="idleOpacityRange" type="range" min="35" max="95" step="5" />
-                  <output id="idleOpacityValue"></output>
+                  <input id="farOpacityRange" type="range" min="22" max="80" step="2" />
+                  <output id="farOpacityValue"></output>
+                </div>
+              </label>
+
+              <label class="setting-column">
+                <span>
+                  <strong>靠近不透明度</strong>
+                  <small>光标进入窗口范围但还没有操作时的透明程度。</small>
+                </span>
+                <div class="range-row">
+                  <input id="nearOpacityRange" type="range" min="35" max="92" step="2" />
+                  <output id="nearOpacityValue"></output>
+                </div>
+              </label>
+
+              <label class="setting-column">
+                <span>
+                  <strong>操作不透明度</strong>
+                  <small>点击控件进入操作状态后的清晰程度。</small>
+                </span>
+                <div class="range-row">
+                  <input id="activeOpacityRange" type="range" min="65" max="98" step="2" />
+                  <output id="activeOpacityValue"></output>
                 </div>
               </label>
             </section>
@@ -139,7 +160,7 @@
               <label class="setting-column">
                 <span>
                   <strong>OpenAI Base URL</strong>
-                  <small>填接口根地址，例如 https://api.deepseek.com 或 https://ai.tju.edu.cn/api/v3。</small>
+                  <small>填写接口根地址，例如 https://api.openai.com/v1。</small>
                 </span>
                 <input id="openaiBaseUrlInput" class="setting-input" type="url" placeholder="https://api.openai.com/v1" />
               </label>
@@ -151,8 +172,29 @@
                 </span>
                 <input id="openaiModelInput" class="setting-input" type="text" placeholder="gpt-4o-mini" />
               </label>
+
+              <label class="setting-column">
+                <span>
+                  <strong>剪贴板 AI 快捷键</strong>
+                  <small>复制文字后按此快捷键，会在鼠标位置生成可编辑确认框。</small>
+                </span>
+                <input id="clipboardShortcutInput" class="setting-input" type="text" placeholder="Ctrl+Alt+T" />
+                <small id="clipboardShortcutStatus" class="setting-status"></small>
+              </label>
             </section>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="closeChoicePanel" class="close-choice-panel" hidden>
+      <div class="close-choice-card">
+        <h2>关闭 Ntodo</h2>
+        <p>选择缩小到托盘继续运行，或者完全退出程序。</p>
+        <div class="close-choice-actions">
+          <button id="closeToTrayButton" type="button">缩小到托盘</button>
+          <button id="quitAppButton" class="danger-action" type="button">完全关闭</button>
+          <button id="closeChoiceCancel" type="button">取消</button>
         </div>
       </div>
     </section>
@@ -165,19 +207,19 @@
             <div class="task-title"></div>
             <div class="task-meta"></div>
             <div class="task-actions">
-              <button class="small-button due-toggle" title="设置截止日期" aria-label="设置截止日期">
+              <button class="small-button due-toggle" type="button" title="设置截止日期" aria-label="设置截止日期">
                 <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="5" y="6" width="14" height="13" rx="3"></rect>
                   <path d="M8 4v4M16 4v4M5 10h14"></path>
                   <path d="M9 14h1M14 14h1"></path>
                 </svg>
               </button>
-              <button class="small-button subtask-toggle" title="添加子项目" aria-label="添加子项目">
+              <button class="small-button subtask-toggle" type="button" title="添加子项目" aria-label="添加子项目">
                 <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 6v12M6 12h12"></path>
                 </svg>
               </button>
-              <button class="small-button delete-task" title="删除任务" aria-label="删除任务">
+              <button class="small-button delete-task" type="button" title="删除任务" aria-label="删除任务">
                 <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7 8h10M10 8V6h4v2M9 10v7M15 10v7"></path>
                   <path d="M8 8l1 11h6l1-11"></path>
@@ -189,11 +231,11 @@
         <form class="due-date-form" hidden>
           <input type="date" title="截止时间" />
           <button type="submit">保存</button>
-          <button class="clear-due" type="button" title="清除截止时间">×</button>
+          <button class="clear-due" type="button" title="清除截止时间" aria-label="清除截止时间">x</button>
         </form>
         <form class="subtask-form" hidden>
           <input type="text" placeholder="添加子项目" maxlength="100" />
-          <button>加入</button>
+          <button type="submit">加入</button>
         </form>
         <div class="subtasks"></div>
       </article>

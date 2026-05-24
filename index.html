@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ntodo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="titlebar">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <h1>Ntodo</h1>
+            <p id="todayText"></p>
+          </div>
+        </div>
+        <div class="window-actions">
+          <button id="pinButton" class="icon-button active" title="始终置顶">⌖</button>
+          <button id="settingsButton" class="icon-button" title="设置">⚙</button>
+          <button id="minButton" class="icon-button" title="最小化">−</button>
+          <button id="closeButton" class="icon-button danger" title="关闭">×</button>
+        </div>
+      </header>
+
+      <form id="quickAddForm" class="quick-add">
+        <input id="taskInput" type="text" placeholder="添加现在要做的事" maxlength="120" />
+        <input id="dueDateInput" class="due-date-input" type="date" title="截止时间" />
+        <div class="priority-picker" aria-label="优先级">
+          <button class="priority-option high active" type="button" data-priority="3">高</button>
+          <button class="priority-option medium" type="button" data-priority="2">中</button>
+          <button class="priority-option low" type="button" data-priority="1">低</button>
+        </div>
+        <button id="addTaskButton" class="primary-button" type="submit">添加</button>
+      </form>
+
+      <section class="toolbar">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-view="active">待完成</button>
+          <button class="tab" data-view="completed">已完成</button>
+        </div>
+        <button id="screenshotButton" class="ghost-button" title="从截图创建待整理任务">截图</button>
+      </section>
+
+      <section id="encourage" class="encourage" hidden></section>
+
+      <section id="activeView" class="task-list"></section>
+      <section id="completedView" class="task-list completed-list" hidden></section>
+    </main>
+
+    <section id="onboarding" class="onboarding" hidden>
+      <div class="guide-card">
+        <div class="guide-kicker">第一次使用</div>
+        <h2>把它放在右上角，别让任务占满注意力。</h2>
+        <p>添加任务、选择优先级。高优先级会自动排在前面；点任务右侧加号可以添加子项目；完成后会进入已完成记录。</p>
+        <button id="guideDoneButton">知道了</button>
+      </div>
+    </section>
+
+    <section id="settingsPanel" class="settings-panel" hidden>
+      <div class="settings-card">
+        <header class="settings-head">
+          <div>
+            <div class="guide-kicker">设置</div>
+            <h2>Ntodo 偏好</h2>
+          </div>
+          <button id="settingsCloseButton" class="icon-button" title="关闭设置">×</button>
+        </header>
+
+        <label class="setting-row">
+          <span>
+            <strong>开机自动启动</strong>
+            <small>安装版生效，开发模式可能受系统限制。</small>
+          </span>
+          <input id="openAtLoginToggle" type="checkbox" />
+        </label>
+
+        <label class="setting-column">
+          <span>
+            <strong>空闲不透明度</strong>
+            <small>鼠标不在窗口上时的背景清晰程度。</small>
+          </span>
+          <div class="range-row">
+            <input id="idleOpacityRange" type="range" min="35" max="95" step="5" />
+            <output id="idleOpacityValue"></output>
+          </div>
+        </label>
+      </div>
+    </section>
+
+    <template id="taskTemplate">
+      <article class="task-item">
+        <div class="task-row">
+          <input class="task-check" type="checkbox" />
+          <div class="task-main">
+            <div class="task-title"></div>
+            <div class="task-meta"></div>
+            <div class="task-actions">
+              <button class="small-button due-toggle" title="设置截止日期" aria-label="设置截止日期">
+                <span class="calendar-icon" aria-hidden="true"></span>
+              </button>
+              <button class="small-button subtask-toggle" title="添加子项目" aria-label="添加子项目">
+                <span class="plus-icon" aria-hidden="true"></span>
+              </button>
+              <button class="small-button delete-task" title="删除任务" aria-label="删除任务">
+                <span class="trash-icon" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <form class="due-date-form" hidden>
+          <input type="date" title="截止时间" />
+          <button type="submit">保存</button>
+          <button class="clear-due" type="button" title="清除截止时间">×</button>
+        </form>
+        <form class="subtask-form" hidden>
+          <input type="text" placeholder="添加子项目" maxlength="100" />
+          <button>加入</button>
+        </form>
+        <div class="subtasks"></div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

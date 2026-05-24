@@ -1,17 +1,22 @@
-const state = {
+﻿const state = {
   tasks: [],
   completed: [],
   view: 'active',
   addMode: 'manual',
   pinned: true,
   priority: 3,
+  interactionMode: 'far',
+  isEngaged: false,
   settings: {
-    idleOpacity: 0.72,
+    farOpacity: 0.38,
+    nearOpacity: 0.72,
+    activeOpacity: 0.96,
     openAtLogin: false,
     autoCompleteParentOnSubtasksDone: true,
     openaiApiKey: '',
     openaiBaseUrl: 'https://api.openai.com/v1',
-    openaiModel: 'gpt-4o-mini'
+    openaiModel: 'gpt-4o-mini',
+    clipboardAiShortcut: 'Ctrl+Alt+T'
   }
 };
 
@@ -25,7 +30,7 @@ const addEncouragements = [
 
 const completeEncouragements = [
   '完成得很稳，继续推进下一件。',
-  '这一项已经收尾，节奏不错。',
+  '这一项已经收尾。',
   '任务清掉了，给自己一点正反馈。',
   '做完就是进展，下一步更轻了。',
   '很好，这件事不用再占脑子了。'
@@ -120,23 +125,113 @@ async function persist() {
   });
 }
 
+function clampOpacity(value, fallback) {
+  return Math.min(0.98, Math.max(0.22, Number(value) || fallback));
+}
+
+function setOpacityVariable(name, value) {
+  const opacity = clampOpacity(value, 0.72);
+  document.documentElement.style.setProperty(`--shell-${name}-opacity`, opacity.toString());
+  document.documentElement.style.setProperty(`--shell-${name}-bottom-opacity`, Math.max(0.22, opacity - 0.06).toString());
+}
+
 function applySettings() {
-  const opacity = Math.min(0.95, Math.max(0.35, Number(state.settings.idleOpacity) || 0.72));
-  document.documentElement.style.setProperty('--shell-idle-opacity', opacity.toString());
-  document.documentElement.style.setProperty('--shell-idle-bottom-opacity', Math.max(0.35, opacity - 0.06).toString());
-  $('#idleOpacityRange').value = Math.round(opacity * 100).toString();
-  $('#idleOpacityValue').textContent = `${Math.round(opacity * 100)}%`;
+  state.settings.farOpacity = clampOpacity(state.settings.farOpacity ?? state.settings.idleOpacity, 0.38);
+  state.settings.nearOpacity = clampOpacity(state.settings.nearOpacity ?? state.settings.idleOpacity, 0.72);
+  state.settings.activeOpacity = clampOpacity(state.settings.activeOpacity, 0.96);
+  setOpacityVariable('far', state.settings.farOpacity);
+  setOpacityVariable('near', state.settings.nearOpacity);
+  setOpacityVariable('active', state.settings.activeOpacity);
+  $('#farOpacityRange').value = Math.round(state.settings.farOpacity * 100).toString();
+  $('#nearOpacityRange').value = Math.round(state.settings.nearOpacity * 100).toString();
+  $('#activeOpacityRange').value = Math.round(state.settings.activeOpacity * 100).toString();
+  $('#farOpacityValue').textContent = `${Math.round(state.settings.farOpacity * 100)}%`;
+  $('#nearOpacityValue').textContent = `${Math.round(state.settings.nearOpacity * 100)}%`;
+  $('#activeOpacityValue').textContent = `${Math.round(state.settings.activeOpacity * 100)}%`;
   $('#openAtLoginToggle').checked = Boolean(state.settings.openAtLogin);
   $('#openaiApiKeyInput').value = state.settings.openaiApiKey || '';
   $('#openaiBaseUrlInput').value = state.settings.openaiBaseUrl || 'https://api.openai.com/v1';
   $('#openaiModelInput').value = state.settings.openaiModel || 'gpt-4o-mini';
+  $('#clipboardShortcutInput').value = state.settings.clipboardAiShortcut || 'Ctrl+Alt+T';
   $('#autoCompleteParentToggle').checked = Boolean(state.settings.autoCompleteParentOnSubtasksDone);
+}
+
+function setInteractionMode(mode) {
+  if (state.interactionMode === mode) return;
+  state.interactionMode = mode;
+  document.body.classList.toggle('interaction-far', mode === 'far');
+  document.body.classList.toggle('interaction-near', mode === 'near');
+  document.body.classList.toggle('interaction-active', mode === 'active');
+}
+
+function isInteractiveTarget(target) {
+  return Boolean(target.closest('button, input, select, textarea, a, label, .settings-card, .guide-card'));
+}
+
+async function setMousePassthrough(passthrough) {
+  if (state.mousePassthrough === passthrough) return;
+  state.mousePassthrough = passthrough;
+  await window.ntodo.setMousePassthrough(passthrough);
+}
+
+function resetEngageTimer() {
+  window.clearTimeout(resetEngageTimer.timer);
+  resetEngageTimer.timer = window.setTimeout(() => {
+    state.isEngaged = false;
+    setInteractionMode('far');
+    setMousePassthrough(true);
+  }, 18000);
+}
+
+function engageWindow() {
+  state.isEngaged = true;
+  setInteractionMode('active');
+  setMousePassthrough(false);
+  resetEngageTimer();
+}
+
+function bindInteractionLayer() {
+  document.body.classList.add('interaction-far');
+  setMousePassthrough(true);
+
+  document.addEventListener('pointermove', (event) => {
+    if (state.isEngaged) {
+      resetEngageTimer();
+      return;
+    }
+    setInteractionMode('near');
+    setMousePassthrough(!isInteractiveTarget(event.target));
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (isInteractiveTarget(event.target)) engageWindow();
+  }, true);
+
+  document.addEventListener('click', (event) => {
+    if (!state.isEngaged && !isInteractiveTarget(event.target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+
+  document.addEventListener('mouseleave', () => {
+    if (state.isEngaged) return;
+    setInteractionMode('far');
+    setMousePassthrough(true);
+  });
+
+  window.addEventListener('blur', () => {
+    state.isEngaged = false;
+    setInteractionMode('far');
+    setMousePassthrough(true);
+  });
 }
 
 function applyAddMode() {
   const isAiMode = state.addMode === 'ai';
   $('.manual-controls').hidden = isAiMode;
   $('.ai-controls').hidden = !isAiMode;
+  $('#quickAddForm').classList.toggle('ai-mode', isAiMode);
   $('#taskInput').placeholder = isAiMode
     ? '例如：明天一定要交英语作文，分成查资料、写初稿、修改'
     : '添加现在要做的事';
@@ -450,11 +545,25 @@ async function deleteCompletedTask(id) {
   render();
 }
 
-async function addScreenshotTask() {
-  const imagePath = await window.ntodo.pickScreenshot();
-  if (!imagePath) return;
-  const filename = imagePath.split(/[\\/]/).pop();
-  await addTask(`整理截图中的事项：${filename}`, 3, 'screenshot');
+async function parseTasksFromText(text, source = 'ai') {
+  const parsed = await window.ntodo.parseNaturalTask({
+    text,
+    settings: state.settings,
+    today: new Date().toISOString().slice(0, 10),
+    existingTasks: state.tasks.map((task) => ({
+      title: task.title,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      subtaskCount: task.subtasks.length
+    }))
+  });
+
+  const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+  if (!tasks.length) throw new Error('AI 没有识别到可添加的任务');
+
+  for (const task of tasks) {
+    await addTask(task.title, task.priority, source, task.dueDate, task.subtasks);
+  }
 }
 
 async function addAiTasks() {
@@ -471,25 +580,7 @@ async function addAiTasks() {
   button.textContent = '...';
 
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const result = await window.ntodo.parseNaturalTask({
-      text,
-      today,
-      existingTasks: sortedTasks().slice(0, 12).map((task) => ({
-        title: task.title,
-        priority: task.priority,
-        dueDate: task.dueDate || '',
-        subtaskCount: task.subtasks.length
-      })),
-      settings: state.settings
-    });
-    const tasks = Array.isArray(result.tasks) ? result.tasks : [];
-    if (tasks.length === 0) throw new Error('没有解析到任务');
-
-    for (const task of tasks) {
-      await addTask(task.title, task.priority, 'ai', task.dueDate, task.subtasks);
-    }
-
+    await parseTasksFromText(text, 'ai');
     input.value = '';
     $('#dueDateInput').value = '';
     $('#aiError').hidden = true;
@@ -527,6 +618,12 @@ function bindEvents() {
     input.value = '';
     dueDateInput.value = '';
     input.focus();
+  });
+
+  $('#taskInput').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    $('#quickAddForm').requestSubmit();
   });
 
   document.querySelectorAll('.add-mode-option').forEach((button) => {
@@ -578,10 +675,16 @@ function bindEvents() {
     }
   });
 
-  $('#idleOpacityRange').addEventListener('input', async (event) => {
-    state.settings.idleOpacity = Number(event.currentTarget.value) / 100;
-    applySettings();
-    await persist();
+  [
+    ['farOpacityRange', 'farOpacity'],
+    ['nearOpacityRange', 'nearOpacity'],
+    ['activeOpacityRange', 'activeOpacity']
+  ].forEach(([rangeId, settingKey]) => {
+    $(`#${rangeId}`).addEventListener('input', async (event) => {
+      state.settings[settingKey] = Number(event.currentTarget.value) / 100;
+      applySettings();
+      await persist();
+    });
   });
 
   $('#openAtLoginToggle').addEventListener('change', async (event) => {
@@ -616,24 +719,63 @@ function bindEvents() {
     await persist();
   });
 
+  $('#clipboardShortcutInput').addEventListener('change', async (event) => {
+    const shortcut = event.currentTarget.value.trim() || 'Ctrl+Alt+T';
+    state.settings.clipboardAiShortcut = shortcut;
+    const result = await window.ntodo.setClipboardShortcut(shortcut);
+    $('#clipboardShortcutStatus').textContent = result.ok
+      ? `已注册：${shortcut}`
+      : `注册失败：${shortcut} 可能已被占用`;
+    applySettings();
+    await persist();
+  });
+
   $('#guideDoneButton').addEventListener('click', () => {
     localStorage.setItem('ntodo:onboarding-seen', '1');
     $('#onboarding').hidden = true;
   });
 
-  $('#screenshotButton').addEventListener('click', addScreenshotTask);
   $('#aiAddButton').addEventListener('click', addAiTasks);
   $('#minButton').addEventListener('click', () => window.ntodo.minimize());
-  $('#closeButton').addEventListener('click', () => window.ntodo.close());
+  $('#closeButton').addEventListener('click', () => {
+    engageWindow();
+    $('#closeChoicePanel').hidden = false;
+  });
+  $('#closeChoicePanel').addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) {
+      $('#closeChoicePanel').hidden = true;
+    }
+  });
+  $('#closeChoiceCancel').addEventListener('click', () => {
+    $('#closeChoicePanel').hidden = true;
+  });
+  $('#closeToTrayButton').addEventListener('click', () => {
+    $('#closeChoicePanel').hidden = true;
+    window.ntodo.close();
+  });
+  $('#quitAppButton').addEventListener('click', () => window.ntodo.quit());
   $('#pinButton').addEventListener('click', async () => {
     state.pinned = !state.pinned;
     await window.ntodo.setPinned(state.pinned);
     $('#pinButton').classList.toggle('active', state.pinned);
   });
+
+  window.ntodo.onStoreChanged((store) => {
+    state.tasks = Array.isArray(store.tasks) ? store.tasks : [];
+    state.completed = Array.isArray(store.completed) ? store.completed : [];
+    state.settings = {
+      ...state.settings,
+      ...(store && typeof store.settings === 'object' ? store.settings : {})
+    };
+    applySettings();
+    render();
+    showTaskFeedback('add');
+  });
 }
 
 async function boot() {
   bindEvents();
+  bindInteractionLayer();
   const stored = await window.ntodo.readStore();
   state.tasks = Array.isArray(stored.tasks) ? stored.tasks : [];
   state.completed = Array.isArray(stored.completed) ? stored.completed : [];
@@ -648,6 +790,13 @@ async function boot() {
     state.settings.openAtLogin = false;
   }
   applySettings();
+  window.ntodo.setClipboardShortcut(state.settings.clipboardAiShortcut || 'Ctrl+Alt+T').then((result) => {
+    $('#clipboardShortcutStatus').textContent = result.ok
+      ? `已注册：${state.settings.clipboardAiShortcut || 'Ctrl+Alt+T'}`
+      : '快捷键注册失败，可能已被其他应用占用';
+  }).catch(() => {
+    $('#clipboardShortcutStatus').textContent = '快捷键注册失败';
+  });
   applyAddMode();
   render();
   showOnboardingIfNeeded();

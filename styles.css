@@ -1,15 +1,11 @@
-﻿:root {
+:root {
   color-scheme: light;
   font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
   color: #24221e;
   background: transparent;
   border-radius: 14px;
-  --shell-far-opacity: 0.38;
-  --shell-far-bottom-opacity: 0.32;
-  --shell-near-opacity: 0.72;
-  --shell-near-bottom-opacity: 0.66;
-  --shell-active-opacity: 0.96;
-  --shell-active-bottom-opacity: 0.9;
+  --shell-idle-opacity: 0.72;
+  --shell-idle-bottom-opacity: 0.66;
 }
 
 * {
@@ -27,9 +23,7 @@ body {
 }
 
 button,
-input,
-textarea,
-select {
+input {
   font: inherit;
 }
 
@@ -45,83 +39,21 @@ button {
   overflow: hidden;
   background: linear-gradient(
     180deg,
-    rgba(255, 250, 240, var(--shell-far-opacity)) 0%,
-    rgba(242, 234, 220, var(--shell-far-bottom-opacity)) 100%
+    rgba(255, 250, 240, var(--shell-idle-opacity)) 0%,
+    rgba(242, 234, 220, var(--shell-idle-bottom-opacity)) 100%
   );
   border: 1px solid rgba(45, 38, 28, 0.16);
   border-radius: 14px;
   background-clip: padding-box;
   clip-path: inset(0 round 14px);
   box-shadow: 0 18px 42px rgba(34, 28, 18, 0.16);
-  transition: background 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  transition: background 180ms ease, box-shadow 180ms ease;
 }
 
-body.interaction-near .app-shell {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 250, 240, var(--shell-near-opacity)) 0%,
-    rgba(242, 234, 220, var(--shell-near-bottom-opacity)) 100%
-  );
-  border-color: rgba(45, 38, 28, 0.2);
-  box-shadow: 0 18px 42px rgba(34, 28, 18, 0.18);
-}
-
-body.interaction-active .app-shell,
+body:hover .app-shell,
 body:focus-within .app-shell {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 250, 240, var(--shell-active-opacity)) 0%,
-    rgba(242, 234, 220, var(--shell-active-bottom-opacity)) 100%
-  );
-  border-color: rgba(45, 38, 28, 0.24);
+  background: linear-gradient(180deg, rgba(255, 250, 240, 0.96) 0%, rgba(242, 234, 220, 0.94) 100%);
   box-shadow: 0 20px 48px rgba(34, 28, 18, 0.22);
-}
-
-body.interaction-far .app-shell {
-  border-color: rgba(45, 38, 28, 0.08);
-  box-shadow: 0 12px 28px rgba(34, 28, 18, 0.08);
-}
-
-body.interaction-far .titlebar,
-body.interaction-far .window-actions,
-body.interaction-far .add-mode-switch,
-body.interaction-far .priority-picker,
-body.interaction-far .tabs,
-body.interaction-far .ghost-button,
-body.interaction-far .task-item,
-body.interaction-far .quick-add input,
-body.interaction-far .quick-add textarea,
-body.interaction-far .small-button,
-body.interaction-far .subtask-delete,
-body.interaction-far .due-date-form input,
-body.interaction-far .subtask-form input {
-  background-color: rgba(255, 253, 248, 0.32);
-  border-color: rgba(45, 38, 28, 0.08);
-  box-shadow: none;
-}
-
-body.interaction-far .titlebar {
-  backdrop-filter: none;
-}
-
-body.interaction-far .task-item {
-  background: rgba(255, 253, 248, 0.34);
-}
-
-body.interaction-far .quick-add input,
-body.interaction-far .quick-add textarea {
-  background: rgba(255, 253, 248, 0.38);
-}
-
-body.interaction-far .tab.active,
-body.interaction-far .add-mode-option.active,
-body.interaction-far .priority-option.high.active,
-body.interaction-far .priority-option.medium.active,
-body.interaction-far .priority-option.low.active,
-body.interaction-far .primary-button,
-body.interaction-far .ai-button,
-body.interaction-far .icon-button.active {
-  opacity: 0.72;
 }
 
 .titlebar {
@@ -130,14 +62,8 @@ body.interaction-far .icon-button.active {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 7px 7px 0;
-  padding: 7px 8px;
+  padding: 10px 11px 8px;
   border-bottom: 1px solid rgba(61, 50, 35, 0.1);
-  border: 1px solid rgba(45, 38, 28, 0.12);
-  border-radius: 11px;
-  background: rgba(255, 253, 248, 0.54);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(5px);
 }
 
 .brand {
@@ -172,22 +98,15 @@ h1 {
   -webkit-app-region: no-drag;
   display: flex;
   gap: 5px;
-  padding: 3px;
-  border: 1px solid rgba(43, 37, 28, 0.1);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.56);
 }
 
 .icon-button {
   width: 28px;
   height: 28px;
-  display: inline-grid;
-  place-items: center;
   border: 1px solid rgba(43, 37, 28, 0.14);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.68);
   color: #393229;
-  line-height: 1;
 }
 
 .icon-button.active {
@@ -200,29 +119,16 @@ h1 {
   color: #fff;
 }
 
-.title-icon {
-  width: 15px;
-  height: 15px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .quick-add {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  padding: 10px 11px 9px;
+  grid-template-columns: 1fr 94px 52px;
+  gap: 7px;
+  padding: 10px 11px 8px;
 }
 
 .quick-add input,
-.quick-add textarea,
 .due-date-form input,
-.subtask-form input,
-.setting-input {
+.subtask-form input {
   min-width: 0;
   border: 1px solid rgba(52, 45, 34, 0.16);
   border-radius: 9px;
@@ -231,78 +137,23 @@ h1 {
   outline: none;
 }
 
-.quick-add input,
-.quick-add textarea {
-  height: 40px;
+.quick-add input {
+  height: 38px;
   padding: 0 11px;
   font-size: 14px;
 }
 
-.quick-add textarea {
-  resize: none;
-  overflow-y: auto;
-  line-height: 20px;
-  padding-top: 9px;
-  padding-bottom: 9px;
-}
-
-.quick-add.ai-mode textarea {
-  height: 74px;
-  white-space: pre-wrap;
-}
-
-.add-mode-switch {
-  width: max-content;
-  display: grid;
-  grid-template-columns: repeat(2, 48px);
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid rgba(52, 45, 34, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.add-mode-option {
-  height: 26px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #665c4b;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.add-mode-option.active {
-  background: #1c7c68;
-  color: #fff;
-  box-shadow: 0 6px 14px rgba(28, 124, 104, 0.16);
+#taskInput {
+  grid-column: 1 / -1;
 }
 
 .due-date-input {
   color: #776d5c;
 }
 
-.manual-controls {
-  display: grid;
-  grid-template-columns: 1fr 90px 58px;
-  gap: 7px;
-}
-
-.ai-controls {
-  display: grid;
-  grid-template-columns: 1fr;
-}
-
-.manual-controls[hidden],
-.ai-controls[hidden] {
-  display: none;
-}
-
 .quick-add input:focus,
-.quick-add textarea:focus,
 .due-date-form input:focus,
-.subtask-form input:focus,
-.setting-input:focus {
+.subtask-form input:focus {
   border-color: rgba(28, 124, 104, 0.52);
   box-shadow: 0 0 0 3px rgba(28, 124, 104, 0.12);
 }
@@ -343,7 +194,6 @@ h1 {
 }
 
 .primary-button,
-.ai-button,
 .due-date-form button,
 .subtask-form button {
   border: 0;
@@ -353,21 +203,10 @@ h1 {
   font-weight: 700;
 }
 
-.ai-button {
-  height: 38px;
-  background: #1c7c68;
-}
-
-.ai-button:disabled {
-  cursor: default;
-  opacity: 0.58;
-}
-
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: relative;
   padding: 0 11px 8px;
   gap: 8px;
 }
@@ -403,7 +242,6 @@ h1 {
   font-size: 12px;
 }
 
-
 .encourage {
   margin: 0 11px 8px;
   padding: 8px 10px;
@@ -414,54 +252,10 @@ h1 {
   animation: fadeIn 180ms ease-out;
 }
 
-.ai-error {
-  margin: 0 11px 8px;
-  padding: 8px 10px;
-  border-radius: 9px;
-  background: rgba(185, 67, 50, 0.1);
-  color: #8b3d32;
-  font-size: 12px;
-  line-height: 1.35;
-  animation: fadeIn 180ms ease-out;
-}
-
 .task-list {
   flex: 1;
   overflow: auto;
   padding: 0 11px 11px;
-  scrollbar-color: rgba(78, 71, 61, 0.28) transparent;
-  scrollbar-width: thin;
-}
-
-.task-list::-webkit-scrollbar,
-.quick-add textarea::-webkit-scrollbar,
-.settings-card::-webkit-scrollbar {
-  width: 8px;
-}
-
-.task-list::-webkit-scrollbar-track,
-.quick-add textarea::-webkit-scrollbar-track,
-.settings-card::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.task-list::-webkit-scrollbar-thumb,
-.quick-add textarea::-webkit-scrollbar-thumb,
-.settings-card::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(78, 71, 61, 0.28);
-}
-
-body.interaction-far .task-list,
-body.interaction-far .quick-add textarea,
-body.interaction-far .settings-card {
-  scrollbar-color: rgba(78, 71, 61, 0.16) transparent;
-}
-
-body.interaction-far .task-list::-webkit-scrollbar-thumb,
-body.interaction-far .quick-add textarea::-webkit-scrollbar-thumb,
-body.interaction-far .settings-card::-webkit-scrollbar-thumb {
-  background: rgba(78, 71, 61, 0.16);
 }
 
 .task-list:empty::before {
@@ -674,16 +468,94 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   color: #1c7c68;
 }
 
-.action-icon {
+.calendar-icon {
+  position: relative;
   width: 16px;
   height: 16px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transform: translateZ(0);
+  color: currentColor;
+}
+
+.calendar-icon::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 3px;
+  width: 12px;
+  height: 11px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  background: linear-gradient(currentColor 0 0) 0 4px / 100% 1.5px no-repeat;
+}
+
+.calendar-icon::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 10px;
+  width: 2.5px;
+  height: 2.5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 4px 0 0 currentColor;
+}
+
+.due-toggle.has-due .calendar-icon,
+.due-toggle:hover .calendar-icon {
+  color: currentColor;
+}
+
+.plus-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+
+.plus-icon::before,
+.plus-icon::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 7px;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.plus-icon::after {
+  transform: rotate(90deg);
+}
+
+.trash-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+
+.trash-icon::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 5px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 2px 2px;
+}
+
+.trash-icon::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 10px;
+  height: 1.5px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 3px -2px 0 -0.25px currentColor, 6px -2px 0 -0.25px currentColor;
 }
 
 .due-date-form {
@@ -749,24 +621,18 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
 }
 
 .subtask-delete {
-  width: 24px;
-  height: 24px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid rgba(185, 67, 50, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 253, 248, 0.64);
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: #8b3d32;
+  font-size: 12px;
 }
 
 .subtask-delete:hover {
-  background: rgba(185, 67, 50, 0.1);
-  color: #b94332;
-}
-
-.subtask-delete .action-icon {
-  width: 14px;
-  height: 14px;
+  background: #b94332;
+  color: #fff;
 }
 
 .completed-time {
@@ -797,72 +663,8 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   display: none;
 }
 
-.close-choice-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(39, 34, 26, 0.2);
-}
-
-.close-choice-panel[hidden] {
-  display: none;
-}
-
-
-.close-choice-card {
-  width: min(286px, 100%);
-  padding: 16px;
-  border: 1px solid rgba(52, 45, 34, 0.13);
-  border-radius: 12px;
-  background: #fffdf8;
-  box-shadow: 0 18px 46px rgba(35, 29, 19, 0.24);
-}
-
-.close-choice-card h2 {
-  margin: 0 0 6px;
-  font-size: 16px;
-}
-
-.close-choice-card p {
-  margin: 0 0 14px;
-  color: #716858;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.close-choice-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.close-choice-actions button {
-  min-height: 34px;
-  border: 1px solid rgba(52, 45, 34, 0.12);
-  border-radius: 9px;
-  background: #fff;
-  color: #343027;
-  font-weight: 800;
-}
-
-.close-choice-actions button:first-child {
-  grid-column: 1 / -1;
-  background: #1c7c68;
-  color: #fff;
-}
-
-.close-choice-actions .danger-action {
-  border-color: rgba(185, 67, 50, 0.24);
-  color: #b94332;
-}
-
 .settings-card {
-  width: min(314px, 100%);
-  max-height: calc(100vh - 72px);
-  overflow: auto;
+  width: min(300px, 100%);
   padding: 14px;
   border: 1px solid rgba(52, 45, 34, 0.13);
   border-radius: 12px;
@@ -878,49 +680,6 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   margin-bottom: 12px;
 }
 
-.settings-layout {
-  display: grid;
-  grid-template-columns: 74px 1fr;
-  gap: 12px;
-  align-items: start;
-}
-
-.settings-menu {
-  display: grid;
-  gap: 6px;
-  padding: 4px;
-  border: 1px solid rgba(52, 45, 34, 0.1);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.48);
-}
-
-.settings-menu-item {
-  height: 30px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #665c4b;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.settings-menu-item.active {
-  background: #2d2a24;
-  color: #fff;
-}
-
-.settings-sections {
-  min-width: 0;
-}
-
-.settings-section {
-  display: none;
-}
-
-.settings-section.active {
-  display: block;
-}
-
 .settings-head h2 {
   margin: 4px 0 0;
   font-size: 16px;
@@ -932,18 +691,8 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
 .setting-column {
   display: flex;
   gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid rgba(52, 45, 34, 0.08);
-}
-
-.settings-section > .setting-row:first-child,
-.settings-section > .setting-column:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.setting-column:has(#idleOpacityRange) {
-  display: none;
+  padding: 11px 0;
+  border-top: 1px solid rgba(52, 45, 34, 0.1);
 }
 
 .setting-row {
@@ -992,18 +741,6 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   color: #4f4638;
   font-size: 12px;
   text-align: right;
-}
-
-.setting-input {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  font-size: 12px;
-}
-
-.setting-status {
-  margin-top: -2px;
-  color: #1c7c68;
 }
 
 
@@ -1061,4 +798,3 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
     transform: translateY(0);
   }
 }
-

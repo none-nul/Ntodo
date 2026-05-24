@@ -40,10 +40,12 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": false,
+      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Ntodo",
+      "installerIcon": "assets/ntodo.ico",
+      "uninstallerIcon": "assets/ntodo.ico",
       "artifactName": "Ntodo-Setup-${version}.${ext}"
     }
   },

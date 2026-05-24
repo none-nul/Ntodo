@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, screen, desktopCapturer, dialog, Tray, Menu } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, screen, Tray, Menu } = require('electron');
+const { clipboard, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 
@@ -6,8 +7,12 @@ const WINDOW_WIDTH = 330;
 const WINDOW_HEIGHT = 500;
 
 let mainWindow;
+let clipboardPreviewWindow;
 let tray;
 let isQuitting = false;
+let registeredClipboardShortcut = '';
+
+const DEFAULT_CLIPBOARD_SHORTCUT = 'CommandOrControl+Alt+T';
 
 app.setName('Ntodo');
 app.setAppUserModelId('com.ntodo.desktop');
@@ -32,7 +37,28 @@ async function readStore() {
 async function writeStore(data) {
   await fs.mkdir(path.dirname(getStorePath()), { recursive: true });
   await fs.writeFile(getStorePath(), JSON.stringify(data, null, 2), 'utf8');
+  registerClipboardShortcut(data?.settings?.clipboardAiShortcut);
   return data;
+}
+
+function normalizeAccelerator(shortcut) {
+  const clean = String(shortcut || '').trim();
+  if (!clean) return '';
+  return clean
+    .split('+')
+    .map((part) => {
+      const token = part.trim();
+      if (/^(ctrl|control)$/i.test(token)) return 'CommandOrControl';
+      if (/^cmdorctrl$/i.test(token)) return 'CommandOrControl';
+      if (/^cmd$/i.test(token)) return 'Command';
+      if (/^option$/i.test(token)) return 'Alt';
+      if (/^esc$/i.test(token)) return 'Escape';
+      if (/^del$/i.test(token)) return 'Delete';
+      if (/^[a-z]$/i.test(token)) return token.toUpperCase();
+      return token;
+    })
+    .filter(Boolean)
+    .join('+');
 }
 
 function buildOpenAiUrl(baseUrl) {
@@ -68,6 +94,20 @@ function normalizeParsedTasks(parsed) {
       .filter((task) => task.title)
       .slice(0, 8)
   };
+}
+
+function normalizeTasksForStore(tasks) {
+  return (Array.isArray(tasks) ? tasks : [])
+    .map((task) => ({
+      title: String(task?.title || '').trim(),
+      priority: [1, 2, 3].includes(Number(task?.priority)) ? Number(task.priority) : 2,
+      dueDate: /^\d{4}-\d{2}-\d{2}$/.test(String(task?.dueDate || '')) ? String(task.dueDate) : '',
+      subtasks: Array.isArray(task?.subtasks)
+        ? task.subtasks.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 12)
+        : []
+    }))
+    .filter((task) => task.title)
+    .slice(0, 8);
 }
 
 function extractJsonObject(text) {
@@ -178,6 +218,220 @@ async function parseNaturalTask(_event, payload = {}) {
   return normalizeParsedTasks(extractJsonObject(content));
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildClipboardPreviewHtml(tasks, error = '') {
+  const rows = normalizeTasksForStore(tasks);
+  const rowsHtml = rows
+    .map((task, index) => {
+      const subtasks = task.subtasks.join('\n');
+      return `
+        <article class="task-card" data-index="${index}">
+          <label>
+            <span>任务</span>
+            <textarea class="title" rows="2" maxlength="180">${escapeHtml(task.title)}</textarea>
+          </label>
+          <div class="grid">
+            <label>
+              <span>优先级</span>
+              <select class="priority">
+                <option value="3"${task.priority === 3 ? ' selected' : ''}>高</option>
+                <option value="2"${task.priority === 2 ? ' selected' : ''}>中</option>
+                <option value="1"${task.priority === 1 ? ' selected' : ''}>低</option>
+              </select>
+            </label>
+            <label>
+              <span>截止日期</span>
+              <input class="dueDate" type="date" value="${escapeHtml(task.dueDate)}" />
+            </label>
+          </div>
+          <label>
+            <span>子任务</span>
+            <textarea class="subtasks" rows="2" placeholder="每行一个子任务">${escapeHtml(subtasks)}</textarea>
+          </label>
+        </article>`;
+    })
+    .join('');
+
+  const content = rowsHtml || `<div class="empty">${escapeHtml(error || '没有识别到可添加的任务')}</div>`;
+  const disableConfirm = rowsHtml ? '' : ' disabled';
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    :root { color-scheme: light; font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; color: #26221b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: transparent; }
+    main { width: 360px; max-height: 430px; overflow: auto; padding: 12px; border: 1px solid rgba(52,45,34,.16); border-radius: 12px; background: #fffdf8; box-shadow: 0 18px 46px rgba(35,29,19,.24); }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    h1 { margin: 0; font-size: 14px; line-height: 1.2; }
+    p { margin: 3px 0 0; color: #776d5c; font-size: 11px; }
+    .status { margin: 0 0 10px; padding: 8px 9px; border-radius: 8px; background: rgba(28,124,104,.1); color: #0f624e; font-size: 12px; }
+    .status.error { background: rgba(185,67,50,.1); color: #8b3d32; }
+    .task-card { display: grid; gap: 8px; padding: 10px; margin-bottom: 8px; border: 1px solid rgba(52,45,34,.12); border-radius: 9px; background: #fff; }
+    label { display: grid; gap: 4px; min-width: 0; }
+    label span { color: #6b604f; font-size: 11px; font-weight: 800; }
+    textarea, input, select { width: 100%; min-width: 0; border: 1px solid rgba(52,45,34,.16); border-radius: 8px; background: #fffdf8; color: #2c271f; font: inherit; font-size: 12px; outline: none; }
+    textarea { resize: vertical; padding: 7px 8px; line-height: 1.35; }
+    input, select { height: 32px; padding: 0 8px; }
+    textarea:focus, input:focus, select:focus { border-color: rgba(28,124,104,.52); box-shadow: 0 0 0 3px rgba(28,124,104,.12); }
+    .grid { display: grid; grid-template-columns: 86px 1fr; gap: 8px; }
+    .actions { position: sticky; bottom: -12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 10px; background: linear-gradient(180deg, rgba(255,253,248,0), #fffdf8 26%); }
+    button { height: 34px; border: 1px solid rgba(52,45,34,.14); border-radius: 9px; background: #fff; color: #343027; font-weight: 800; cursor: pointer; }
+    button.primary { border: 0; background: #1c7c68; color: #fff; }
+    button:disabled { cursor: default; opacity: .55; }
+    .empty { padding: 16px 10px; color: #776d5c; text-align: center; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>确认添加到 Ntodo</h1>
+        <p>AI 已根据剪贴板生成任务，可先修改再添加。</p>
+      </div>
+    </header>
+    ${error ? `<div class="status error">${escapeHtml(error)}</div>` : '<div class="status">检查无误后确认添加。</div>'}
+    <section id="tasks">${content}</section>
+    <div class="actions">
+      <button id="cancelButton" type="button">取消</button>
+      <button id="confirmButton" class="primary" type="button"${disableConfirm}>添加</button>
+    </div>
+  </main>
+  <script>
+    const collect = () => Array.from(document.querySelectorAll('.task-card')).map((card) => ({
+      title: card.querySelector('.title').value.trim(),
+      priority: Number(card.querySelector('.priority').value),
+      dueDate: card.querySelector('.dueDate').value,
+      subtasks: card.querySelector('.subtasks').value.split(/\\n+/).map((item) => item.trim()).filter(Boolean)
+    })).filter((task) => task.title);
+    document.getElementById('cancelButton').addEventListener('click', () => window.ntodo.cancelClipboardPreview());
+    document.getElementById('confirmButton').addEventListener('click', async (event) => {
+      event.currentTarget.disabled = true;
+      await window.ntodo.confirmClipboardTasks(collect());
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function showClipboardPreview(tasks, error = '') {
+  if (clipboardPreviewWindow && !clipboardPreviewWindow.isDestroyed()) {
+    clipboardPreviewWindow.close();
+  }
+
+  const point = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(point);
+  const width = 360;
+  const height = 430;
+  const x = Math.min(Math.max(point.x + 12, display.workArea.x), display.workArea.x + display.workArea.width - width);
+  const y = Math.min(Math.max(point.y + 12, display.workArea.y), display.workArea.y + display.workArea.height - height);
+
+  const previewWindow = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    title: 'Ntodo Clipboard Preview',
+    icon: getIconPath(),
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  clipboardPreviewWindow = previewWindow;
+  previewWindow.setAlwaysOnTop(true, 'screen-saver');
+  previewWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildClipboardPreviewHtml(tasks, error))}`);
+  previewWindow.on('closed', () => {
+    if (clipboardPreviewWindow === previewWindow) clipboardPreviewWindow = null;
+  });
+}
+
+async function addConfirmedClipboardTasks(tasks) {
+  const cleanTasks = normalizeTasksForStore(tasks);
+  if (!cleanTasks.length) return false;
+
+  const store = await readStore();
+  const createdAt = new Date().toISOString();
+  const existingTasks = Array.isArray(store.tasks) ? store.tasks : [];
+  store.tasks = existingTasks.concat(
+    cleanTasks.map((task) => ({
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      title: task.title,
+      priority: task.priority,
+      source: 'clipboard-ai',
+      dueDate: task.dueDate,
+      createdAt,
+      subtasks: task.subtasks.map((subtask) => ({
+        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        title: subtask,
+        done: false,
+        createdAt
+      }))
+    }))
+  );
+  await writeStore(store);
+  mainWindow?.webContents.send('store:changed', store);
+  clipboardPreviewWindow?.close();
+  showMainWindow();
+  return true;
+}
+
+async function runClipboardAiShortcut() {
+  const text = clipboard.readText().trim();
+  if (!text) {
+    showClipboardPreview([], '剪贴板没有可识别的文字。');
+    return;
+  }
+
+  showClipboardPreview([], '正在识别剪贴板内容...');
+
+  try {
+    const store = await readStore();
+    const parsed = await parseNaturalTask(null, {
+      text,
+      settings: store.settings || {},
+      existingTasks: Array.isArray(store.tasks) ? store.tasks : []
+    });
+    showClipboardPreview(parsed.tasks);
+  } catch (error) {
+    showClipboardPreview([], error.message || 'AI 识别失败');
+  }
+}
+
+function registerClipboardShortcut(shortcut) {
+  if (!app.isReady()) return { ok: false, shortcut: '' };
+  const accelerator = normalizeAccelerator(shortcut || DEFAULT_CLIPBOARD_SHORTCUT);
+  if (registeredClipboardShortcut === accelerator) return { ok: true, shortcut: accelerator };
+
+  if (registeredClipboardShortcut) {
+    globalShortcut.unregister(registeredClipboardShortcut);
+    registeredClipboardShortcut = '';
+  }
+
+  if (!accelerator) return { ok: true, shortcut: '' };
+  const ok = globalShortcut.register(accelerator, runClipboardAiShortcut);
+  if (ok) registeredClipboardShortcut = accelerator;
+  return { ok, shortcut: accelerator };
+}
+
 function placeTopRight(win) {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const { x, y, width } = display.workArea;
@@ -204,10 +458,10 @@ function createTray() {
   tray.setToolTip('Ntodo');
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: '显示 Ntodo', click: showMainWindow },
+      { label: 'Show Ntodo', click: showMainWindow },
       { type: 'separator' },
       {
-        label: '退出',
+        label: 'Exit',
         click: () => {
           isQuitting = true;
           app.quit();
@@ -256,6 +510,9 @@ function createWindow() {
 app.whenReady().then(() => {
   createTray();
   createWindow();
+  readStore().then((store) => registerClipboardShortcut(store?.settings?.clipboardAiShortcut)).catch(() => {
+    registerClipboardShortcut(DEFAULT_CLIPBOARD_SHORTCUT);
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -265,6 +522,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {
@@ -274,9 +532,24 @@ app.on('window-all-closed', () => {
 ipcMain.handle('store:read', readStore);
 ipcMain.handle('store:write', (_event, data) => writeStore(data));
 ipcMain.handle('ai:parse-task', parseNaturalTask);
+ipcMain.handle('clipboard-ai:set-shortcut', (_event, shortcut) => registerClipboardShortcut(shortcut));
+ipcMain.handle('clipboard-ai:confirm', (_event, tasks) => addConfirmedClipboardTasks(tasks));
+ipcMain.handle('clipboard-ai:cancel-preview', () => {
+  clipboardPreviewWindow?.close();
+  return true;
+});
 
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:close', () => mainWindow?.hide());
+ipcMain.handle('window:quit', () => {
+  isQuitting = true;
+  app.quit();
+});
+ipcMain.handle('window:mouse-passthrough', (_event, passthrough) => {
+  if (!mainWindow) return Boolean(passthrough);
+  mainWindow.setIgnoreMouseEvents(Boolean(passthrough), { forward: true });
+  return Boolean(passthrough);
+});
 ipcMain.handle('window:pin', (_event, pinned) => {
   mainWindow?.setAlwaysOnTop(Boolean(pinned), 'screen-saver');
   return Boolean(pinned);
@@ -291,24 +564,3 @@ ipcMain.handle('settings:set-open-at-login', (_event, openAtLogin) => {
   return app.getLoginItemSettings();
 });
 
-ipcMain.handle('screenshot:pick', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: '选择一张截图',
-    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-    properties: ['openFile']
-  });
-  if (result.canceled || !result.filePaths[0]) return null;
-  return result.filePaths[0];
-});
-
-ipcMain.handle('screenshot:sources', async () => {
-  const sources = await desktopCapturer.getSources({
-    types: ['screen', 'window'],
-    thumbnailSize: { width: 480, height: 300 }
-  });
-  return sources.slice(0, 12).map((source) => ({
-    id: source.id,
-    name: source.name,
-    thumbnail: source.thumbnail.toDataURL()
-  }));
-});
