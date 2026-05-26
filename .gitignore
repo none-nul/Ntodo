@@ -1,6 +1,12 @@
 node_modules/
 dist/
 release/
+installer/
 .npm-cache/
 .cache/
 *.log
+
+mobile/android/.gradle/
+mobile/android/.idea/
+mobile/android/**/build/
+mobile/android/local.properties

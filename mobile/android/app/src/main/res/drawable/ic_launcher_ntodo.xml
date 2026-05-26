@@ -1,0 +1,52 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- 剪贴板背景阴影 (可选，增加立体感) -->
+    <path
+        android:fillColor="#1A000000"
+        android:pathData="M10,10h30a4,4 0,0 1,4 4v28a4,4 0,0 1,-4 4h-30a4,4 0,0 1,-4 -4v-28a4,4 0,0 1,4 -4" />
+
+    <!-- 剪贴板主体边框 (浅棕色) -->
+    <path
+        android:fillColor="#D6B691"
+        android:pathData="M8,9h32a5,5 0,0 1,5 5v26a5,5 0,0 1,-5 5h-32a5,5 0,0 1,-5 -5v-26a5,5 0,0 1,5 -5" />
+
+    <!-- 剪贴板主体纸张 (米黄色) -->
+    <path
+        android:fillColor="#FFF2CC"
+        android:pathData="M10,11h28a3,3 0,0 1,3 3v22a3,3 0,0 1,-3 3h-28a3,3 0,0 1,-3 -3v-22a3,3 0,0 1,3 -3" />
+
+    <!-- 顶部的青绿色夹子 -->
+    <path
+        android:fillColor="#1A7E6C"
+        android:pathData="M24,6m-8,0a8,5 0,1 1,16 0a8,5 0,1 1,-16 0" />
+
+    <!-- 夹子中间的白色圆点 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,6m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+
+    <!-- 列表行 1 -->
+    <path
+        android:fillColor="#998675"
+        android:pathData="M14,16h2v4h-2z M18,17h16v2h-16z" />
+    <!-- 列表行 2 -->
+    <path
+        android:fillColor="#998675"
+        android:pathData="M14,24h2v4h-2z M18,25h16v2h-16z" />
+    <!-- 列表行 3 -->
+    <path
+        android:fillColor="#998675"
+        android:pathData="M14,32h2v4h-2z M18,33h10v2h-10z" />
+
+    <!-- 右下角的深蓝色大勾选 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M22,34l5,5l13,-13"
+        android:strokeColor="#2E4A7B"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="4.5" />
+</vector>
