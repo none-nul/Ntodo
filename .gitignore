@@ -4,3 +4,4 @@ release/
 .npm-cache/
 .cache/
 *.log
+.env
