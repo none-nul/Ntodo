@@ -31,7 +31,7 @@ app.use((req, res, next) => {
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Credentials', 'false');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -243,6 +243,43 @@ app.get('/auth/me', auth, async (req, res, next) => {
     const result = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [req.userId]);
     if (!result.rowCount) return res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
     res.json({ user: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/user/settings', auth, async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT payload, updated_at FROM user_settings WHERE user_id = $1', [req.userId]);
+    if (!result.rowCount) return res.json({ settings: {}, updated_at: null });
+    res.json({ settings: result.rows[0].payload || {}, updated_at: result.rows[0].updated_at });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/user/settings', auth, async (req, res, next) => {
+  const payload = req.body?.settings;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return badRequest(res, 'INVALID_SETTINGS', 'Settings payload must be an object');
+  }
+  const updatedAt = normalizeIncomingTime(req.body.updated_at || new Date().toISOString());
+  try {
+    const result = await pool.query(
+      `INSERT INTO user_settings (user_id, payload, updated_at)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         payload = EXCLUDED.payload,
+         updated_at = EXCLUDED.updated_at
+       WHERE user_settings.updated_at IS NULL OR user_settings.updated_at <= EXCLUDED.updated_at
+       RETURNING payload, updated_at`,
+      [req.userId, JSON.stringify(payload), updatedAt]
+    );
+    if (!result.rowCount) {
+      const current = await pool.query('SELECT payload, updated_at FROM user_settings WHERE user_id = $1', [req.userId]);
+      return res.json({ settings: current.rows[0]?.payload || {}, updated_at: current.rows[0]?.updated_at || null, skipped: true });
+    }
+    res.json({ settings: result.rows[0].payload || {}, updated_at: result.rows[0].updated_at });
   } catch (error) {
     next(error);
   }

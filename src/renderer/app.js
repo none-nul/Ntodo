@@ -19,6 +19,7 @@ const state = {
     openaiModel: 'gpt-4o-mini',
     openaiProfiles: [],
     activeOpenaiProfileId: '',
+    settingsUpdatedAt: '',
     clipboardAiShortcut: 'Ctrl+Alt+T'
   }
 };
@@ -108,6 +109,10 @@ function maskApiKey(apiKey) {
   const key = String(apiKey || '');
   if (key.length <= 8) return key ? '••••' : '未填写';
   return `${key.slice(0, 3)}••••${key.slice(-4)}`;
+}
+
+function markSettingsChanged() {
+  state.settings.settingsUpdatedAt = nowIso();
 }
 
 function createDefaultSyncState(sync = {}) {
@@ -433,6 +438,7 @@ async function authenticateSync(mode) {
     normalizePendingChangesForAccount();
     $('#syncPasswordInput').value = '';
     await persist();
+    await syncUserSettingsOnce();
     sync.lastError = '';
     updateSyncStatus();
     showEncouragement('add', mode === 'register' ? '注册成功，已登录' : '登录成功');
@@ -789,6 +795,51 @@ function setSyncError(message) {
   updateSyncStatus();
 }
 
+function settingsSnapshot() {
+  ensureOpenaiProfiles();
+  return {
+    ...state.settings,
+    settingsUpdatedAt: state.settings.settingsUpdatedAt || nowIso()
+  };
+}
+
+async function syncUserSettingsOnce() {
+  const sync = ensureSyncState();
+  if (!sync.accessToken) return;
+  ensureOpenaiProfiles();
+  if (!state.settings.settingsUpdatedAt) state.settings.settingsUpdatedAt = nowIso();
+
+  const remote = await apiCall('/user/settings', { timeoutMs: 15000 });
+  const remoteSettings = remote?.settings && typeof remote.settings === 'object' ? remote.settings : {};
+  const remoteUpdatedAt = remote.updated_at || remoteSettings.settingsUpdatedAt || '';
+  const hasRemoteSettings = Object.keys(remoteSettings).length > 0;
+  const remoteTime = timeValue(remoteUpdatedAt);
+  const localTime = timeValue(state.settings.settingsUpdatedAt);
+
+  if (hasRemoteSettings && remoteTime > localTime) {
+    state.settings = {
+      ...state.settings,
+      ...remoteSettings,
+      settingsUpdatedAt: new Date(remoteTime).toISOString()
+    };
+    ensureOpenaiProfiles();
+    applySettings();
+    await persist();
+    return;
+  }
+
+  const snapshot = settingsSnapshot();
+  await apiCall('/user/settings', {
+    method: 'PUT',
+    body: {
+      settings: snapshot,
+      updated_at: snapshot.settingsUpdatedAt
+    },
+    timeoutMs: 15000
+  });
+  await persist();
+}
+
 function openOpenaiEditor(profileId = '') {
   const profiles = ensureOpenaiProfiles();
   const profile = profiles.find((item) => item.id === profileId);
@@ -827,6 +878,7 @@ function renderOpenaiProfiles() {
     info.addEventListener('click', async () => {
       state.settings.activeOpenaiProfileId = profile.id;
       syncActiveOpenaiSettings();
+      markSettingsChanged();
       closeOpenaiEditor();
       renderOpenaiProfiles();
       await persist();
@@ -848,6 +900,7 @@ function renderOpenaiProfiles() {
         state.settings.activeOpenaiProfileId = state.settings.openaiProfiles[0]?.id || '';
       }
       syncActiveOpenaiSettings();
+      markSettingsChanged();
       closeOpenaiEditor();
       renderOpenaiProfiles();
       await persist();
@@ -889,6 +942,7 @@ async function saveOpenaiProfile() {
   else state.settings.openaiProfiles.push(profile);
   state.settings.activeOpenaiProfileId = profile.id;
   syncActiveOpenaiSettings();
+  markSettingsChanged();
   closeOpenaiEditor();
   renderOpenaiProfiles();
   await persist();
@@ -1482,6 +1536,7 @@ function bindEvents() {
   ].forEach(([rangeId, settingKey]) => {
     $(`#${rangeId}`).addEventListener('input', async (event) => {
       state.settings[settingKey] = Number(event.currentTarget.value) / 100;
+      markSettingsChanged();
       applySettings();
       await persist();
     });
@@ -1492,12 +1547,14 @@ function bindEvents() {
     state.settings.openAtLogin = enabled;
     const loginSettings = await window.ntodo.setOpenAtLogin(enabled);
     state.settings.openAtLogin = Boolean(loginSettings.openAtLogin);
+    markSettingsChanged();
     applySettings();
     await persist();
   });
 
   $('#autoCompleteParentToggle').addEventListener('change', async (event) => {
     state.settings.autoCompleteParentOnSubtasksDone = event.currentTarget.checked;
+    markSettingsChanged();
     applySettings();
     await persist();
   });
@@ -1524,6 +1581,7 @@ function bindEvents() {
   $('#clipboardShortcutInput').addEventListener('change', async (event) => {
     const shortcut = event.currentTarget.value.trim() || 'Ctrl+Alt+T';
     state.settings.clipboardAiShortcut = shortcut;
+    markSettingsChanged();
     const result = await window.ntodo.setClipboardShortcut(shortcut);
     $('#clipboardShortcutStatus').textContent = result.ok
       ? `已注册：${shortcut}`
