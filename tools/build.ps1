@@ -57,17 +57,4 @@ if (Test-Path $fastExe) {
   $shortcut.Save()
 }
 
-if ($Installer) {
-  $setupExe = Get-ChildItem -Path $outputDir -Filter "Ntodo-Setup-*.exe" |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-
-  if ($setupExe) {
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $root "tools\patch-icon.ps1") -ExePath $setupExe.FullName
-    if ($LASTEXITCODE -ne 0) {
-      exit $LASTEXITCODE
-    }
-  }
-}
-
 exit $LASTEXITCODE

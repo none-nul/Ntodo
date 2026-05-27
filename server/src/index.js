@@ -3,15 +3,55 @@ const fs = require('fs/promises');
 const path = require('path');
 const express = require('express');
 const { Pool } = require('pg');
+const { accountPageHandler } = require('./account-page');
+const { marketingPageHandler, windowsDownloadsPageHandler } = require('./marketing-pages');
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://ntodo:ntodo_password@postgres:5432/ntodo';
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const ALLOWED_ORIGINS = new Set(
+  (process.env.CORS_ORIGINS || 'https://account.nonenull.top,https://ntodo.nonenull.top,https://www.nonenull.top')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const AUTH_RATE_LIMIT_MAX = Number(process.env.AUTH_RATE_LIMIT_MAX || 20);
+const DOWNLOAD_ROOT = process.env.DOWNLOAD_ROOT || path.join(__dirname, '..', 'downloads');
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const app = express();
+app.set('trust proxy', 1);
+const authRateBuckets = new Map();
 
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'false');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
+app.get('/downloads/windows', windowsDownloadsPageHandler);
+app.get('/downloads/windows/', windowsDownloadsPageHandler);
+app.use(
+  '/downloads',
+  express.static(DOWNLOAD_ROOT, {
+    fallthrough: false,
+    setHeaders(res) {
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+  })
+);
+app.get('/', marketingPageHandler, accountPageHandler, (_req, res) => {
+  res.json({ ok: true, service: 'ntodo-sync', sites: ['www.nonenull.top', 'ntodo.nonenull.top', 'account.nonenull.top'] });
+});
 
 function uuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -63,6 +103,27 @@ async function auth(req, res, next) {
   next();
 }
 
+function rateLimitAuth(req, res, next) {
+  const now = Date.now();
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const key = `${ip}:${req.path}`;
+  const bucket = authRateBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    authRateBuckets.set(key, { count: 1, resetAt: now + AUTH_RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+  bucket.count += 1;
+  if (bucket.count > AUTH_RATE_LIMIT_MAX) {
+    return res.status(429).json({
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Too many attempts. Please wait before trying again.'
+      }
+    });
+  }
+  return next();
+}
+
 async function upsertDevice(client, userId, device = {}) {
   const deviceId = uuid(device.device_id) ? device.device_id : crypto.randomUUID();
   await client.query(
@@ -78,6 +139,35 @@ async function upsertDevice(client, userId, device = {}) {
   return deviceId;
 }
 
+function timeValue(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function normalizeIncomingTime(value) {
+  const time = timeValue(value);
+  return time ? new Date(time).toISOString() : new Date().toISOString();
+}
+
+function rowToTodoPayload(row) {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    note: row.note || '',
+    completed: Boolean(row.completed),
+    due_at: row.due_at,
+    priority: Number(row.priority) || 0,
+    list_id: row.list_id || null,
+    sort_order: Number(row.sort_order) || 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    deleted_at: row.deleted_at || null,
+    version: Number(row.version) || 1,
+    device_id: row.device_id,
+    server_version: Number(row.server_version) || 0
+  };
+}
 async function latestServerVersion(client, userId) {
   const result = await client.query('SELECT COALESCE(MAX(server_version), 0)::bigint AS version FROM sync_changes WHERE user_id = $1', [userId]);
   return Number(result.rows[0].version);
@@ -93,7 +183,7 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'ntodo-sync' });
 });
 
-app.post('/auth/register', async (req, res, next) => {
+app.post('/auth/register', rateLimitAuth, async (req, res, next) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   const name = String(req.body.name || '').trim() || null;
@@ -124,7 +214,7 @@ app.post('/auth/register', async (req, res, next) => {
   }
 });
 
-app.post('/auth/login', async (req, res, next) => {
+app.post('/auth/login', rateLimitAuth, async (req, res, next) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   const client = await pool.connect();
@@ -148,6 +238,73 @@ app.post('/auth/login', async (req, res, next) => {
   }
 });
 
+app.get('/auth/me', auth, async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [req.userId]);
+    if (!result.rowCount) return res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/account/summary', auth, async (req, res, next) => {
+  try {
+    const [devicesResult, todoResult, versionResult, recentResult] = await Promise.all([
+      pool.query(
+        `SELECT id, device_name, platform, last_seen_at, created_at
+         FROM devices
+         WHERE user_id = $1
+         ORDER BY COALESCE(last_seen_at, created_at) DESC
+         LIMIT 12`,
+        [req.userId]
+      ),
+      pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE deleted_at IS NULL)::int AS total_todos,
+           COUNT(*) FILTER (WHERE deleted_at IS NULL AND completed = false)::int AS active_todos,
+           COUNT(*) FILTER (WHERE deleted_at IS NULL AND completed = true)::int AS completed_todos,
+           COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)::int AS deleted_todos
+         FROM todos
+         WHERE user_id = $1`,
+        [req.userId]
+      ),
+      pool.query(
+        `SELECT COALESCE(MAX(server_version), 0)::bigint AS latest_server_version,
+                MAX(created_at) AS last_change_at
+         FROM sync_changes
+         WHERE user_id = $1`,
+        [req.userId]
+      ),
+      pool.query(
+        `SELECT id, title, completed, priority, updated_at, server_version
+         FROM todos
+         WHERE user_id = $1 AND deleted_at IS NULL
+         ORDER BY updated_at DESC
+         LIMIT 6`,
+        [req.userId]
+      )
+    ]);
+
+    const counts = todoResult.rows[0] || {};
+    const version = versionResult.rows[0] || {};
+    res.json({
+      summary: {
+        device_count: devicesResult.rowCount,
+        total_todos: Number(counts.total_todos || 0),
+        active_todos: Number(counts.active_todos || 0),
+        completed_todos: Number(counts.completed_todos || 0),
+        deleted_todos: Number(counts.deleted_todos || 0),
+        latest_server_version: Number(version.latest_server_version || 0),
+        last_change_at: version.last_change_at || null
+      },
+      devices: devicesResult.rows,
+      recent_todos: recentResult.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 app.post('/sync/push', auth, async (req, res, next) => {
   const deviceId = req.body.device_id;
   const changes = Array.isArray(req.body.changes) ? req.body.changes.slice(0, 100) : [];
@@ -167,32 +324,47 @@ app.post('/sync/push', auth, async (req, res, next) => {
       }
 
       await client.query('BEGIN');
-      const existing = await client.query(
+      const existingChange = await client.query(
         'SELECT server_version FROM sync_changes WHERE user_id = $1 AND client_change_id = $2',
         [req.userId, change.client_change_id]
       );
-      if (existing.rowCount) {
+      if (existingChange.rowCount) {
         await client.query('COMMIT');
         accepted.push({
           client_change_id: change.client_change_id,
           entity_id: change.entity_id,
-          server_version: Number(existing.rows[0].server_version),
+          server_version: Number(existingChange.rows[0].server_version),
           status: 'duplicate'
+        });
+        continue;
+      }
+
+      const payload = change.payload || {};
+      const incomingUpdatedAt = normalizeIncomingTime(payload.updated_at || payload.deleted_at);
+      const incomingDeletedAt = payload.deleted_at || null;
+      const current = await client.query('SELECT * FROM todos WHERE user_id = $1 AND id = $2 FOR UPDATE', [req.userId, change.entity_id]);
+
+      if (current.rowCount && timeValue(incomingUpdatedAt) < timeValue(current.rows[0].updated_at)) {
+        await client.query('COMMIT');
+        accepted.push({
+          client_change_id: change.client_change_id,
+          entity_id: change.entity_id,
+          server_version: Number(current.rows[0].server_version) || 0,
+          status: 'stale'
         });
         continue;
       }
 
       const versionResult = await client.query("SELECT nextval('global_server_version_seq')::bigint AS server_version");
       const serverVersion = Number(versionResult.rows[0].server_version);
-      const payload = change.payload || {};
-      const current = await client.query('SELECT * FROM todos WHERE user_id = $1 AND id = $2 FOR UPDATE', [req.userId, change.entity_id]);
-      const incomingDeletedAt = payload.deleted_at || null;
+      let storedPayload;
 
       if (!current.rowCount) {
-        await client.query(
+        const inserted = await client.query(
           `INSERT INTO todos
            (id, user_id, title, note, completed, due_at, priority, list_id, sort_order, created_at, updated_at, deleted_at, version, device_id, server_version)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+           RETURNING *`,
           [
             change.entity_id,
             req.userId,
@@ -203,19 +375,17 @@ app.post('/sync/push', auth, async (req, res, next) => {
             Number(payload.priority) || 0,
             uuid(payload.list_id) ? payload.list_id : null,
             Number(payload.sort_order) || 0,
-            payload.created_at || new Date().toISOString(),
-            payload.updated_at || new Date().toISOString(),
+            payload.created_at || incomingUpdatedAt,
+            incomingUpdatedAt,
             incomingDeletedAt,
             Number(payload.version) || 1,
             deviceId,
             serverVersion
           ]
         );
+        storedPayload = rowToTodoPayload(inserted.rows[0]);
       } else {
-        const currentDeletedAt = current.rows[0].deleted_at;
-        const deletedAt = currentDeletedAt || incomingDeletedAt;
-        const deleteWins = Boolean(deletedAt);
-        await client.query(
+        const updated = await client.query(
           `UPDATE todos SET
              title = $3,
              note = $4,
@@ -229,29 +399,31 @@ app.post('/sync/push', auth, async (req, res, next) => {
              version = version + 1,
              device_id = $12,
              server_version = $13
-           WHERE user_id = $1 AND id = $2`,
+           WHERE user_id = $1 AND id = $2
+           RETURNING *`,
           [
             req.userId,
             change.entity_id,
-            deleteWins ? current.rows[0].title : String(payload.title || '').slice(0, 260),
-            deleteWins ? current.rows[0].note : payload.note || '',
-            deleteWins ? current.rows[0].completed : Boolean(payload.completed),
-            deleteWins ? current.rows[0].due_at : payload.due_at || null,
-            deleteWins ? current.rows[0].priority : Number(payload.priority) || 0,
-            deleteWins ? current.rows[0].list_id : uuid(payload.list_id) ? payload.list_id : null,
-            deleteWins ? current.rows[0].sort_order : Number(payload.sort_order) || 0,
-            payload.updated_at || new Date().toISOString(),
-            deletedAt,
+            String(payload.title || '').slice(0, 260),
+            payload.note || '',
+            Boolean(payload.completed),
+            payload.due_at || null,
+            Number(payload.priority) || 0,
+            uuid(payload.list_id) ? payload.list_id : null,
+            Number(payload.sort_order) || 0,
+            incomingUpdatedAt,
+            incomingDeletedAt,
             deviceId,
             serverVersion
           ]
         );
+        storedPayload = rowToTodoPayload(updated.rows[0]);
       }
 
       await client.query(
         `INSERT INTO sync_changes (user_id, device_id, entity_type, entity_id, operation, payload, client_change_id, server_version)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [req.userId, deviceId, change.entity_type, change.entity_id, change.operation || 'update', payload, change.client_change_id, serverVersion]
+        [req.userId, deviceId, change.entity_type, change.entity_id, incomingDeletedAt ? 'delete' : change.operation || 'update', storedPayload, change.client_change_id, serverVersion]
       );
       await client.query('COMMIT');
       accepted.push({ client_change_id: change.client_change_id, entity_id: change.entity_id, server_version: serverVersion, status: 'applied' });
@@ -265,7 +437,6 @@ app.post('/sync/push', auth, async (req, res, next) => {
     client.release();
   }
 });
-
 app.get('/sync/pull', auth, async (req, res, next) => {
   const since = Math.max(0, Number(req.query.since_version) || 0);
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
@@ -335,6 +506,9 @@ app.get('/sync/status', auth, async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
+  if (error.status === 404 || error.statusCode === 404 || error.code === 'ENOENT') {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } });
+  }
   res.status(500).json({ error: { code: 'SERVER_ERROR', message: 'Internal server error' } });
 });
 

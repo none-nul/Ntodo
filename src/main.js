@@ -13,9 +13,74 @@ let isQuitting = false;
 let registeredClipboardShortcut = '';
 
 const DEFAULT_CLIPBOARD_SHORTCUT = 'CommandOrControl+Alt+T';
+const DEFAULT_SYNC_SERVER_URL = 'https://api.nonenull.top';
 
 app.setName('Ntodo');
 app.setAppUserModelId('com.ntodo.desktop');
+
+function uid() {
+  return crypto.randomUUID();
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function createDefaultSyncState(sync = {}) {
+  return {
+    userId: sync.userId || 'local-user',
+    deviceId: sync.deviceId || uid(),
+    serverUrl: sync.serverUrl || DEFAULT_SYNC_SERVER_URL,
+    accessToken: sync.accessToken || '',
+    email: sync.email || '',
+    name: sync.name || '',
+    lastServerVersion: Number(sync.lastServerVersion) || 0,
+    lastSyncAt: sync.lastSyncAt || '',
+    status: sync.status || 'offline',
+    lastError: sync.lastError || '',
+    outbox: Array.isArray(sync.outbox) ? sync.outbox : [],
+    appliedChanges: Array.isArray(sync.appliedChanges) ? sync.appliedChanges : [],
+    deletedTodos: Array.isArray(sync.deletedTodos) ? sync.deletedTodos : []
+  };
+}
+
+function buildTodoPayload(sync, task) {
+  return {
+    id: task.id,
+    user_id: sync.userId,
+    title: task.title,
+    note: task.note || '',
+    completed: Boolean(task.completed),
+    due_at: task.dueDate || null,
+    priority: Number(task.priority) || 2,
+    list_id: task.list_id || null,
+    sort_order: Number(task.sort_order) || 0,
+    created_at: task.created_at || task.createdAt,
+    updated_at: task.updated_at || nowIso(),
+    deleted_at: task.deleted_at || null,
+    version: Number(task.version) || 1,
+    device_id: task.device_id || sync.deviceId,
+    subtasks: task.subtasks || []
+  };
+}
+
+function enqueueTodoChange(sync, task, operation = 'create') {
+  sync.outbox.push({
+    id: uid(),
+    user_id: sync.userId,
+    device_id: sync.deviceId,
+    entity_type: 'todo',
+    entity_id: task.id,
+    operation,
+    payload: buildTodoPayload(sync, task),
+    client_change_id: uid(),
+    base_server_version: Number(task.server_version) || 0,
+    created_at: nowIso(),
+    retry_count: 0,
+    next_retry_at: '',
+    status: 'pending'
+  });
+}
 
 function getStorePath() {
   return path.join(app.getPath('userData'), 'tasks.json');
@@ -150,6 +215,72 @@ async function postChatCompletion(url, apiKey, body) {
     clearTimeout(timeout);
   }
 }
+
+async function apiRequest(_event, payload = {}) {
+  const baseUrl = String(payload.baseUrl || DEFAULT_SYNC_SERVER_URL).trim().replace(/\/+$/, '');
+  const pathName = String(payload.path || '').trim();
+  if (!/^https?:\/\//i.test(baseUrl)) throw new Error('同步服务器地址无效');
+  if (!pathName.startsWith('/')) throw new Error('同步接口路径无效');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(payload.timeoutMs) || 15000);
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(payload.headers && typeof payload.headers === 'object' ? payload.headers : {})
+  };
+  if (payload.token) headers.Authorization = `Bearer ${payload.token}`;
+
+  try {
+    const response = await fetch(`${baseUrl}${pathName}`, {
+      method: payload.method || 'GET',
+      headers,
+      body: payload.body === undefined ? undefined : JSON.stringify(payload.body),
+      signal: controller.signal
+    });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+    return { ok: response.ok, status: response.status, data };
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('同步请求超时');
+    const code = error.cause?.code || error.code || '';
+    if (['EACCES', 'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT'].includes(code)) {
+      throw new Error('无法连接同步服务，请检查网络后重试');
+    }
+    throw new Error('同步网络请求失败，请稍后重试');
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+ipcMain.handle('api:request', apiRequest);
+
+async function testOpenAiConfig(_event, payload = {}) {
+  const apiKey = String(payload.apiKey || '').trim();
+  if (!apiKey) throw new Error('请先填写 API Key');
+  const model = String(payload.model || 'gpt-4o-mini').trim();
+  const url = buildOpenAiUrl(payload.baseUrl);
+  const response = await postChatCompletion(url, apiKey, {
+    model,
+    temperature: 0,
+    max_tokens: 8,
+    messages: [
+      { role: 'system', content: '只回复 OK。' },
+      { role: 'user', content: 'ping' }
+    ]
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`API 测试失败：${response.status} ${detail.slice(0, 180)}`);
+  }
+  return { ok: true };
+}
+
+ipcMain.handle('ai:test-config', testOpenAiConfig);
 
 async function parseNaturalTask(_event, payload = {}) {
   const text = String(payload.text || '').trim();
@@ -370,23 +501,36 @@ async function addConfirmedClipboardTasks(tasks) {
 
   const store = await readStore();
   const createdAt = new Date().toISOString();
+  const sync = createDefaultSyncState(store.sync || {});
   const existingTasks = Array.isArray(store.tasks) ? store.tasks : [];
-  store.tasks = existingTasks.concat(
-    cleanTasks.map((task) => ({
-      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      title: task.title,
-      priority: task.priority,
-      source: 'clipboard-ai',
-      dueDate: task.dueDate,
-      createdAt,
-      subtasks: task.subtasks.map((subtask) => ({
-        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        title: subtask,
-        done: false,
-        createdAt
-      }))
+  const createdTasks = cleanTasks.map((task, index) => ({
+    id: uid(),
+    title: task.title,
+    note: '',
+    completed: false,
+    priority: task.priority,
+    source: 'clipboard-ai',
+    dueDate: task.dueDate,
+    created_at: createdAt,
+    createdAt,
+    updated_at: createdAt,
+    deleted_at: null,
+    version: 1,
+    device_id: sync.deviceId,
+    server_version: 0,
+    sync_status: 'pending',
+    list_id: null,
+    sort_order: Date.now() + index,
+    subtasks: task.subtasks.map((subtask) => ({
+      id: uid(),
+      title: subtask,
+      done: false,
+      createdAt
     }))
-  );
+  }));
+  createdTasks.forEach((task) => enqueueTodoChange(sync, task, 'create'));
+  store.sync = sync;
+  store.tasks = existingTasks.concat(createdTasks);
   await writeStore(store);
   mainWindow?.webContents.send('store:changed', store);
   clipboardPreviewWindow?.close();

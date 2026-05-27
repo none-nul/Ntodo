@@ -1,6 +1,7 @@
-﻿const state = {
+const state = {
   tasks: [],
   completed: [],
+  sync: null,
   view: 'active',
   addMode: 'manual',
   pinned: true,
@@ -16,6 +17,8 @@
     openaiApiKey: '',
     openaiBaseUrl: 'https://api.openai.com/v1',
     openaiModel: 'gpt-4o-mini',
+    openaiProfiles: [],
+    activeOpenaiProfileId: '',
     clipboardAiShortcut: 'Ctrl+Alt+T'
   }
 };
@@ -48,11 +51,618 @@ const completedView = $('#completedView');
 const taskTemplate = $('#taskTemplate');
 
 function uid() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (char) =>
+    (Number(char) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(char) / 4).toString(16)
+  );
 }
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+}
+
+function createOpenaiProfile(profile = {}) {
+  const model = String(profile.model || profile.openaiModel || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
+  return {
+    id: profile.id || uid(),
+    name: String(profile.name || model || 'API').trim(),
+    apiKey: String(profile.apiKey || profile.openaiApiKey || '').trim(),
+    baseUrl: String(profile.baseUrl || profile.openaiBaseUrl || 'https://api.openai.com/v1').trim() || 'https://api.openai.com/v1',
+    model
+  };
+}
+
+function syncActiveOpenaiSettings() {
+  const profile = state.settings.openaiProfiles.find((item) => item.id === state.settings.activeOpenaiProfileId);
+  if (!profile) return;
+  state.settings.openaiApiKey = profile.apiKey;
+  state.settings.openaiBaseUrl = profile.baseUrl;
+  state.settings.openaiModel = profile.model;
+}
+
+function ensureOpenaiProfiles() {
+  const settings = state.settings;
+  settings.openaiProfiles = Array.isArray(settings.openaiProfiles)
+    ? settings.openaiProfiles.map(createOpenaiProfile).filter((profile) => profile.apiKey)
+    : [];
+  if (!settings.openaiProfiles.length && settings.openaiApiKey) {
+    settings.openaiProfiles.push(createOpenaiProfile({
+      name: settings.openaiModel || 'OpenAI',
+      apiKey: settings.openaiApiKey,
+      baseUrl: settings.openaiBaseUrl,
+      model: settings.openaiModel
+    }));
+  }
+  if (!settings.openaiProfiles.some((profile) => profile.id === settings.activeOpenaiProfileId)) {
+    settings.activeOpenaiProfileId = settings.openaiProfiles[0]?.id || '';
+  }
+  syncActiveOpenaiSettings();
+  return settings.openaiProfiles;
+}
+
+function maskApiKey(apiKey) {
+  const key = String(apiKey || '');
+  if (key.length <= 8) return key ? '••••' : '未填写';
+  return `${key.slice(0, 3)}••••${key.slice(-4)}`;
+}
+
+function createDefaultSyncState(sync = {}) {
+  return {
+    userId: sync.userId || 'local-user',
+    deviceId: isUuid(sync.deviceId) ? sync.deviceId : uid(),
+    accessToken: sync.accessToken || '',
+    email: sync.email || '',
+    name: sync.name || '',
+    lastServerVersion: Number(sync.lastServerVersion) || 0,
+    lastSyncAt: sync.lastSyncAt || '',
+    status: sync.status || 'offline',
+    lastError: sync.lastError || '',
+    outbox: Array.isArray(sync.outbox) ? sync.outbox : [],
+    appliedChanges: Array.isArray(sync.appliedChanges) ? sync.appliedChanges : [],
+    deletedTodos: Array.isArray(sync.deletedTodos) ? sync.deletedTodos : []
+  };
+}
+
+function ensureSyncState() {
+  if (!state.sync) state.sync = createDefaultSyncState();
+  return state.sync;
+}
+
+function hydrateTask(task, completed = false, index = 0) {
+  const sync = ensureSyncState();
+  const createdAt = task.createdAt || task.created_at || nowIso();
+  const updatedAt = task.updated_at || task.updatedAt || task.completedAt || createdAt;
+  const id = isUuid(task.id) ? task.id : uid();
+  return {
+    ...task,
+    id,
+    title: String(task.title || '').trim(),
+    note: task.note || '',
+    completed: Boolean(task.completed ?? completed),
+    dueDate: task.dueDate || (typeof task.due_at === 'string' ? task.due_at.slice(0, 10) : ''),
+    priority: [1, 2, 3].includes(Number(task.priority)) ? Number(task.priority) : 2,
+    list_id: task.list_id || null,
+    sort_order: Number.isFinite(Number(task.sort_order)) ? Number(task.sort_order) : index,
+    createdAt,
+    created_at: task.created_at || createdAt,
+    updated_at: updatedAt,
+    deleted_at: task.deleted_at || null,
+    version: Math.max(1, Number(task.version) || 1),
+    device_id: isUuid(task.device_id) ? task.device_id : sync.deviceId,
+    server_version: Number(task.server_version) || 0,
+    sync_status: task.sync_status || 'synced',
+    subtasks: Array.isArray(task.subtasks) ? task.subtasks : []
+  };
+}
+
+function todoPayload(task) {
+  const sync = ensureSyncState();
+  return {
+    id: task.id,
+    user_id: sync.userId,
+    title: task.title,
+    note: task.note || '',
+    completed: Boolean(task.completed),
+    due_at: task.dueDate || null,
+    priority: Number(task.priority) || 2,
+    list_id: task.list_id || null,
+    sort_order: Number(task.sort_order) || 0,
+    created_at: task.created_at || task.createdAt,
+    updated_at: task.updated_at || nowIso(),
+    deleted_at: task.deleted_at || null,
+    version: Number(task.version) || 1,
+    device_id: task.device_id || sync.deviceId,
+    subtasks: task.subtasks || []
+  };
+}
+
+function touchTodo(task, completed = Boolean(task.completed)) {
+  const sync = ensureSyncState();
+  task.completed = completed;
+  task.updated_at = nowIso();
+  task.version = Math.max(1, Number(task.version) || 1) + 1;
+  task.device_id = sync.deviceId;
+  task.sync_status = 'pending';
+  if (!task.created_at) task.created_at = task.createdAt || task.updated_at;
+  if (!task.sort_order && task.sort_order !== 0) task.sort_order = Date.now();
+}
+
+function enqueueTodoChange(task, operation = 'update') {
+  const sync = ensureSyncState();
+  sync.outbox.push({
+    id: uid(),
+    user_id: sync.userId,
+    device_id: sync.deviceId,
+    entity_type: 'todo',
+    entity_id: task.id,
+    operation,
+    payload: todoPayload(task),
+    client_change_id: uid(),
+    base_server_version: Number(task.server_version) || 0,
+    created_at: nowIso(),
+    retry_count: 0,
+    next_retry_at: '',
+    status: 'pending'
+  });
+  if (sync.accessToken) scheduleSync();
+}
+
+
+function timeValue(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function hasPendingTodoChange(todoId) {
+  const sync = ensureSyncState();
+  return sync.outbox.some((change) => change.entity_id === todoId && change.status === 'pending');
+}
+
+function removePendingTodoChanges(todoId) {
+  const sync = ensureSyncState();
+  sync.outbox = sync.outbox.filter((change) => change.entity_id !== todoId || change.status === 'synced');
+}
+
+function queueTodoIfMissing(task, operation = 'update') {
+  if (!task?.id || hasPendingTodoChange(task.id)) return false;
+  task.sync_status = 'pending';
+  enqueueTodoChange(task, operation);
+  return true;
+}
+
+function findDeletedTodo(id) {
+  const sync = ensureSyncState();
+  return sync.deletedTodos.find((todo) => todo.id === id) || null;
+}
+
+function flushLocalOrphans() {
+  const sync = ensureSyncState();
+  sync.deletedTodos = sync.deletedTodos.filter((todo) => isUuid(todo.id));
+
+  sync.deletedTodos.forEach((todo) => {
+    if (Number(todo.server_version) <= 0) {
+      removePendingTodoChanges(todo.id);
+      return;
+    }
+    if (todo.sync_status === 'synced') return;
+    if (!todo.deleted_at) todo.deleted_at = todo.updated_at || nowIso();
+    if (!todo.updated_at) todo.updated_at = todo.deleted_at;
+    if (!hasPendingTodoChange(todo.id)) {
+      enqueueTodoChange(todo, 'delete');
+    }
+  });
+
+  [...state.tasks, ...state.completed].forEach((task) => {
+    if (!task.title || task.deleted_at || hasPendingTodoChange(task.id)) return;
+    if (Number(task.server_version) <= 0) {
+      queueTodoIfMissing(task, 'create');
+      return;
+    }
+    if (task.sync_status === 'pending') {
+      queueTodoIfMissing(task, 'update');
+    }
+  });
+}
+function normalizePendingChangesForAccount() {
+  const sync = ensureSyncState();
+  sync.outbox.forEach((change) => {
+    change.user_id = sync.userId;
+    change.device_id = sync.deviceId;
+    if (!isUuid(change.client_change_id)) change.client_change_id = uid();
+    if (!isUuid(change.entity_id) && change.payload?.id && isUuid(change.payload.id)) {
+      change.entity_id = change.payload.id;
+    }
+    if (change.payload && typeof change.payload === 'object') {
+      change.payload.user_id = sync.userId;
+      change.payload.device_id = sync.deviceId;
+    }
+  });
+  [...state.tasks, ...state.completed].forEach((task) => {
+    task.device_id = sync.deviceId;
+  });
+}
+
+function markTodoChanged(task, operation = 'update', completed = Boolean(task.completed)) {
+  touchTodo(task, completed);
+  enqueueTodoChange(task, operation);
+}
+
+function rememberDeletedTodo(task) {
+  const sync = ensureSyncState();
+  const payload = todoPayload(task);
+  payload.server_version = Number(task.server_version) || Number(payload.server_version) || 0;
+  payload.sync_status = task.sync_status || 'pending';
+  sync.deletedTodos = sync.deletedTodos.filter((item) => item.id !== task.id);
+  sync.deletedTodos.push(payload);
+}
+
+function loadStore(store = {}) {
+  const shouldQueueExistingTodos = !store.sync;
+  state.sync = createDefaultSyncState(store.sync || {});
+  state.tasks = (Array.isArray(store.tasks) ? store.tasks : [])
+    .map((task, index) => hydrateTask(task, false, index))
+    .filter((task) => task.title && !task.deleted_at);
+  state.completed = (Array.isArray(store.completed) ? store.completed : [])
+    .map((task, index) => hydrateTask(task, true, index))
+    .filter((task) => task.title && !task.deleted_at);
+  state.settings = {
+    ...state.settings,
+    ...(store && typeof store.settings === 'object' ? store.settings : {})
+  };
+  const localTodoIds = new Set([...state.tasks, ...state.completed].map((task) => task.id));
+  state.sync.outbox = state.sync.outbox.filter((change) =>
+    isUuid(change.client_change_id) &&
+    isUuid(change.entity_id) &&
+    (localTodoIds.has(change.entity_id) || change.operation === 'delete')
+  );
+  state.sync.deletedTodos = state.sync.deletedTodos.filter((todo) => isUuid(todo.id));
+
+  const queuedTodoIds = new Set(state.sync.outbox.map((change) => change.entity_id));
+  [...state.tasks, ...state.completed].forEach((task) => {
+    if (!shouldQueueExistingTodos && (task.server_version > 0 || queuedTodoIds.has(task.id))) return;
+    task.sync_status = 'pending';
+    enqueueTodoChange(task, 'create');
+    queuedTodoIds.add(task.id);
+  });
+}
+
+function syncSummary() {
+  const sync = ensureSyncState();
+  const pending = sync.outbox.filter((change) => change.status === 'pending').length;
+  const account = sync.email ? sync.email : '未登录';
+  const statusMap = {
+    idle: '已同步',
+    offline: '离线',
+    syncing: '同步中',
+    error: '同步失败'
+  };
+  const status = statusMap[sync.status] || sync.status;
+  return `${account} · ${status} · 待同步 ${pending}`;
+}
+
+function updateSyncStatus() {
+  const sync = ensureSyncState();
+  const isLoggedIn = Boolean(sync.accessToken);
+  const errorBox = $('#syncErrorBox');
+  if (errorBox) {
+    errorBox.textContent = sync.lastError || '';
+    errorBox.hidden = !sync.lastError;
+  }
+  $('#syncGuestFields').hidden = isLoggedIn;
+  $('#syncAccountPanel').hidden = !isLoggedIn;
+  const syncIntervalRow = $('#syncIntervalRow');
+  if (syncIntervalRow) syncIntervalRow.hidden = true;
+  $('#syncLoginButton').hidden = isLoggedIn;
+  $('#syncRegisterButton').hidden = isLoggedIn;
+  $('#syncLogoutButton').hidden = !isLoggedIn;
+  if (isLoggedIn) {
+    $('#syncAccountEmail').textContent = sync.email || '已登录';
+    $('#syncAccountMeta').textContent = sync.lastSyncAt ? `上次同步 ${formatTime(sync.lastSyncAt)}` : '尚未完成同步';
+  }
+  const statusText = $('#syncStatusText');
+  if (statusText) statusText.textContent = syncSummary();
+  const syncButton = $('#syncNowButton');
+  if (syncButton) syncButton.disabled = sync.status === 'syncing' || !sync.accessToken;
+}
+
+async function apiCall(pathName, options = {}) {
+  const sync = ensureSyncState();
+  const response = await window.ntodo.apiRequest({
+    path: pathName,
+    method: options.method || 'GET',
+    body: options.body,
+    token: options.token ?? sync.accessToken,
+    timeoutMs: options.timeoutMs || 15000
+  });
+  if (!response.ok) {
+    const message = response.data?.error?.message || `请求失败：${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.data = response.data;
+    throw error;
+  }
+  return response.data;
+}
+
+function currentDeviceInfo() {
+  return {
+    device_id: ensureSyncState().deviceId,
+    device_name: navigator.userAgent.includes('Windows') ? 'Ntodo Windows' : 'Ntodo Desktop',
+    platform: 'desktop'
+  };
+}
+
+async function authenticateSync(mode) {
+  const sync = ensureSyncState();
+  const email = $('#syncEmailInput').value.trim().toLowerCase();
+  const password = $('#syncPasswordInput').value;
+  sync.email = email;
+  sync.lastError = '';
+  updateSyncStatus();
+
+  if (!email || password.length < 8) {
+    setSyncError('请输入邮箱和至少 8 位密码');
+    await persist();
+    return;
+  }
+
+  try {
+    sync.status = 'syncing';
+    updateSyncStatus();
+    const data = await apiCall(mode === 'register' ? '/auth/register' : '/auth/login', {
+      method: 'POST',
+      token: '',
+      body: {
+        email,
+        password,
+        name: email.split('@')[0],
+        device: currentDeviceInfo()
+      }
+    });
+    sync.userId = data.user.id;
+    sync.email = data.user.email;
+    sync.name = data.user.name || '';
+    sync.deviceId = data.device_id || sync.deviceId;
+    sync.accessToken = data.access_token;
+    sync.lastServerVersion = Number(sync.lastServerVersion) || 0;
+    sync.status = 'idle';
+    normalizePendingChangesForAccount();
+    $('#syncPasswordInput').value = '';
+    await persist();
+    sync.lastError = '';
+    updateSyncStatus();
+    showEncouragement('add', mode === 'register' ? '注册成功，已登录' : '登录成功');
+    await syncNow();
+  } catch (error) {
+    sync.status = 'error';
+    if (mode === 'login' && error.status === 401) {
+      sync.lastError = '账号或密码错误';
+    } else if (mode === 'register' && error.status === 409) {
+      sync.lastError = '该邮箱已注册，请直接登录';
+    } else {
+      sync.lastError = error.message || (mode === 'register' ? '注册失败' : '登录失败');
+    }
+    await persist();
+    updateSyncStatus();
+  }
+}
+
+function findLocalTodo(id) {
+  const active = state.tasks.find((task) => task.id === id);
+  if (active) return { task: active, list: state.tasks, completed: false };
+  const completed = state.completed.find((task) => task.id === id);
+  if (completed) return { task: completed, list: state.completed, completed: true };
+  return null;
+}
+
+function taskFromPayload(payload) {
+  return hydrateTask({
+    id: payload.id,
+    title: payload.title,
+    note: payload.note || '',
+    completed: Boolean(payload.completed),
+    dueDate: payload.due_at ? String(payload.due_at).slice(0, 10) : '',
+    priority: payload.priority,
+    list_id: payload.list_id || null,
+    sort_order: payload.sort_order,
+    createdAt: payload.created_at,
+    created_at: payload.created_at,
+    updated_at: payload.updated_at,
+    deleted_at: payload.deleted_at || null,
+    version: payload.version,
+    device_id: payload.device_id,
+    server_version: payload.server_version || 0,
+    sync_status: 'synced',
+    completedAt: payload.completed ? payload.updated_at : undefined,
+    subtasks: Array.isArray(payload.subtasks) ? payload.subtasks : []
+  }, Boolean(payload.completed));
+}
+
+function applyRemoteChange(change) {
+  const sync = ensureSyncState();
+  if (sync.appliedChanges.includes(change.change_id)) return;
+  if (change.entity_type !== 'todo') return;
+  const payload = {
+    ...(change.payload || {}),
+    id: change.entity_id,
+    server_version: Number(change.server_version) || 0
+  };
+  const existing = findLocalTodo(change.entity_id);
+  const deleted = findDeletedTodo(change.entity_id);
+  const remoteUpdatedAt = timeValue(payload.updated_at || change.created_at);
+
+  if (payload.deleted_at) {
+    if (existing) {
+      const localUpdatedAt = timeValue(existing.task.updated_at || existing.task.updatedAt);
+      if (remoteUpdatedAt >= localUpdatedAt) {
+        existing.task.deleted_at = payload.deleted_at;
+        existing.task.updated_at = payload.updated_at || payload.deleted_at;
+        existing.task.server_version = Number(change.server_version) || existing.task.server_version;
+        rememberDeletedTodo(existing.task);
+        existing.list.splice(existing.list.indexOf(existing.task), 1);
+      } else {
+        queueTodoIfMissing(existing.task, 'update');
+      }
+    }
+    return;
+  }
+
+  if (deleted) {
+    const localDeletedAt = timeValue(deleted.deleted_at || deleted.updated_at);
+    if (localDeletedAt >= remoteUpdatedAt) {
+      const currentServerVersion = Number(deleted.server_version) || 0;
+      const remoteServerVersion = Number(change.server_version) || 0;
+      deleted.server_version = Math.max(currentServerVersion, remoteServerVersion);
+      if (deleted.sync_status !== 'synced' && Number(deleted.server_version) > 0 && !hasPendingTodoChange(deleted.id)) {
+        deleted.sync_status = 'pending';
+        enqueueTodoChange(deleted, 'delete');
+      }
+      return;
+    }
+    sync.deletedTodos = sync.deletedTodos.filter((todo) => todo.id !== deleted.id);
+  }
+
+  const nextTask = taskFromPayload(payload);
+  nextTask.server_version = Number(change.server_version) || nextTask.server_version;
+  if (!existing) {
+    (nextTask.completed ? state.completed : state.tasks).push(nextTask);
+    return;
+  }
+
+  const localUpdatedAt = timeValue(existing.task.updated_at || existing.task.updatedAt);
+  if (remoteUpdatedAt < localUpdatedAt) {
+    queueTodoIfMissing(existing.task, 'update');
+    return;
+  }
+
+  Object.assign(existing.task, nextTask);
+  if (nextTask.completed !== existing.completed) {
+    existing.list.splice(existing.list.indexOf(existing.task), 1);
+    (nextTask.completed ? state.completed : state.tasks).push(existing.task);
+  }
+}
+async function pushPendingChanges() {
+  const sync = ensureSyncState();
+  const changes = sync.outbox
+    .filter((change) => change.status === 'pending')
+    .slice(0, 100)
+    .map((change) => ({
+      client_change_id: change.client_change_id,
+      entity_type: change.entity_type,
+      entity_id: change.entity_id,
+      operation: change.operation,
+      base_server_version: Number(change.base_server_version) || 0,
+      payload: {
+        ...change.payload,
+        user_id: sync.userId,
+        device_id: sync.deviceId
+      }
+    }));
+  if (!changes.length) return;
+
+  const data = await apiCall('/sync/push', {
+    method: 'POST',
+    body: {
+      device_id: sync.deviceId,
+      changes
+    },
+    timeoutMs: 20000
+  });
+
+  (data.accepted || []).forEach((accepted) => {
+    const outboxItem = sync.outbox.find((change) => change.client_change_id === accepted.client_change_id);
+    if (outboxItem) {
+      outboxItem.status = 'synced';
+      if (outboxItem.operation === 'delete' && accepted.status !== 'stale') {
+        const deleted = findDeletedTodo(accepted.entity_id);
+        if (deleted) deleted.sync_status = 'synced';
+      }
+    }
+    const local = findLocalTodo(accepted.entity_id);
+    if (local) {
+      local.task.server_version = Number(accepted.server_version) || local.task.server_version;
+      local.task.sync_status = 'synced';
+    } else {
+      const deleted = findDeletedTodo(accepted.entity_id);
+      if (deleted) deleted.server_version = Number(accepted.server_version) || deleted.server_version;
+    }
+  });
+}
+
+async function pullRemoteChanges() {
+  const sync = ensureSyncState();
+  let since = Number(sync.lastServerVersion) || 0;
+  while (true) {
+    const data = await apiCall(`/sync/pull?since_version=${since}&limit=200`);
+    const changes = Array.isArray(data.changes) ? data.changes : [];
+    changes.forEach((change) => {
+      if (change.device_id !== sync.deviceId) applyRemoteChange(change);
+      if (!sync.appliedChanges.includes(change.change_id)) sync.appliedChanges.push(change.change_id);
+      since = Math.max(since, Number(change.server_version) || since);
+    });
+    sync.lastServerVersion = Math.max(since, Number(data.next_since_version) || since);
+    if (!data.has_more) break;
+  }
+}
+
+async function ackSyncVersion() {
+  const sync = ensureSyncState();
+  if (!sync.accessToken) return;
+  await apiCall('/sync/ack', {
+    method: 'POST',
+    body: {
+      device_id: sync.deviceId,
+      last_acked_server_version: sync.lastServerVersion
+    }
+  });
+}
+
+async function syncNow() {
+  const sync = ensureSyncState();
+  if (!sync.accessToken || sync.status === 'syncing') {
+    updateSyncStatus();
+    return;
+  }
+  try {
+    sync.status = 'syncing';
+    sync.lastError = '';
+    updateSyncStatus();
+    normalizePendingChangesForAccount();
+    flushLocalOrphans();
+    await pushPendingChanges();
+    await pullRemoteChanges();
+    if (sync.outbox.some((change) => change.status === 'pending')) {
+      await pushPendingChanges();
+    }
+    await ackSyncVersion();
+    sync.outbox = sync.outbox.filter((change) => change.status !== 'synced').slice(-500);
+    sync.appliedChanges = sync.appliedChanges.slice(-1000);
+    sync.status = 'idle';
+    sync.lastSyncAt = nowIso();
+    await persist();
+    render();
+  } catch (error) {
+    sync.status = 'error';
+    sync.lastError = error.message || '同步失败';
+    await persist();
+  } finally {
+    updateSyncStatus();
+  }
+}
+
+function scheduleSync(delay = 1800) {
+  window.clearTimeout(scheduleSync.timer);
+  scheduleSync.timer = window.setTimeout(syncNow, delay);
+}
+
+function syncOnForeground() {
+  const sync = ensureSyncState();
+  if (!sync.accessToken || sync.status === 'syncing') return;
+  syncNow();
 }
 
 function formatTime(iso) {
@@ -118,9 +728,11 @@ function sortedTasks() {
 }
 
 async function persist() {
+  ensureSyncState();
   await window.ntodo.writeStore({
     tasks: state.tasks,
     completed: state.completed,
+    sync: state.sync,
     settings: state.settings
   });
 }
@@ -136,6 +748,7 @@ function setOpacityVariable(name, value) {
 }
 
 function applySettings() {
+  const sync = ensureSyncState();
   state.settings.farOpacity = clampOpacity(state.settings.farOpacity ?? state.settings.idleOpacity, 0.38);
   state.settings.nearOpacity = clampOpacity(state.settings.nearOpacity ?? state.settings.idleOpacity, 0.72);
   state.settings.activeOpacity = clampOpacity(state.settings.activeOpacity, 0.96);
@@ -149,11 +762,155 @@ function applySettings() {
   $('#nearOpacityValue').textContent = `${Math.round(state.settings.nearOpacity * 100)}%`;
   $('#activeOpacityValue').textContent = `${Math.round(state.settings.activeOpacity * 100)}%`;
   $('#openAtLoginToggle').checked = Boolean(state.settings.openAtLogin);
-  $('#openaiApiKeyInput').value = state.settings.openaiApiKey || '';
-  $('#openaiBaseUrlInput').value = state.settings.openaiBaseUrl || 'https://api.openai.com/v1';
-  $('#openaiModelInput').value = state.settings.openaiModel || 'gpt-4o-mini';
+  ensureOpenaiProfiles();
+  renderOpenaiProfiles();
   $('#clipboardShortcutInput').value = state.settings.clipboardAiShortcut || 'Ctrl+Alt+T';
   $('#autoCompleteParentToggle').checked = Boolean(state.settings.autoCompleteParentOnSubtasksDone);
+  $('#syncEmailInput').value = sync.email || '';
+  updateSyncStatus();
+}
+
+async function logoutSync() {
+  const sync = ensureSyncState();
+  sync.userId = 'local-user';
+  sync.accessToken = '';
+  sync.email = '';
+  sync.name = '';
+  sync.status = 'offline';
+  sync.lastError = '';
+  sync.lastServerVersion = 0;
+  $('#syncPasswordInput').value = '';
+  await persist();
+  updateSyncStatus();
+}
+
+function setSyncError(message) {
+  ensureSyncState().lastError = message;
+  updateSyncStatus();
+}
+
+function openOpenaiEditor(profileId = '') {
+  const profiles = ensureOpenaiProfiles();
+  const profile = profiles.find((item) => item.id === profileId);
+  $('#openaiEditor').hidden = false;
+  $('#openaiEditor').dataset.editingId = profile?.id || '';
+  $('#openaiApiKeyInput').value = profile?.apiKey || '';
+  $('#openaiBaseUrlInput').value = profile?.baseUrl || 'https://api.openai.com/v1';
+  $('#openaiModelInput').value = profile?.model || 'gpt-4o-mini';
+  $('#openaiTestStatus').textContent = profile ? '正在编辑已有 API' : '正在添加新 API';
+}
+
+function closeOpenaiEditor() {
+  $('#openaiEditor').hidden = true;
+  $('#openaiEditor').dataset.editingId = '';
+  $('#openaiApiKeyInput').value = '';
+  $('#openaiBaseUrlInput').value = 'https://api.openai.com/v1';
+  $('#openaiModelInput').value = 'gpt-4o-mini';
+  $('#openaiTestStatus').textContent = '';
+}
+
+function renderOpenaiProfiles() {
+  const profiles = ensureOpenaiProfiles();
+  const list = $('#openaiProfilesList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  profiles.forEach((profile) => {
+    const item = document.createElement('div');
+    item.className = 'api-profile-item';
+    if (profile.id === state.settings.activeOpenaiProfileId) item.classList.add('active');
+
+    const info = document.createElement('button');
+    info.type = 'button';
+    info.className = 'api-profile-main';
+    info.innerHTML = `<strong>${profile.name}</strong><small>${profile.model} · ${maskApiKey(profile.apiKey)}</small>`;
+    info.addEventListener('click', async () => {
+      state.settings.activeOpenaiProfileId = profile.id;
+      syncActiveOpenaiSettings();
+      closeOpenaiEditor();
+      renderOpenaiProfiles();
+      await persist();
+    });
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'api-profile-action';
+    edit.textContent = '编辑';
+    edit.addEventListener('click', () => openOpenaiEditor(profile.id));
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'api-profile-action danger';
+    remove.textContent = '删除';
+    remove.addEventListener('click', async () => {
+      state.settings.openaiProfiles = state.settings.openaiProfiles.filter((item) => item.id !== profile.id);
+      if (state.settings.activeOpenaiProfileId === profile.id) {
+        state.settings.activeOpenaiProfileId = state.settings.openaiProfiles[0]?.id || '';
+      }
+      syncActiveOpenaiSettings();
+      closeOpenaiEditor();
+      renderOpenaiProfiles();
+      await persist();
+    });
+
+    item.append(info, edit, remove);
+    list.append(item);
+  });
+
+  if (!profiles.length) {
+    const empty = document.createElement('div');
+    empty.className = 'api-profile-empty';
+    empty.textContent = '还没有保存 API，点击 + 添加。';
+    list.append(empty);
+    openOpenaiEditor();
+  } else if (!$('#openaiEditor').dataset.editingId) {
+    closeOpenaiEditor();
+  }
+}
+
+async function saveOpenaiProfile() {
+  const apiKey = $('#openaiApiKeyInput').value.trim();
+  const baseUrl = $('#openaiBaseUrlInput').value.trim() || 'https://api.openai.com/v1';
+  const model = $('#openaiModelInput').value.trim() || 'gpt-4o-mini';
+  if (!apiKey) {
+    $('#openaiTestStatus').textContent = '请先填写 API Key';
+    return;
+  }
+  const editingId = $('#openaiEditor').dataset.editingId;
+  const profile = createOpenaiProfile({
+    id: editingId || uid(),
+    name: model,
+    apiKey,
+    baseUrl,
+    model
+  });
+  const index = state.settings.openaiProfiles.findIndex((item) => item.id === profile.id);
+  if (index >= 0) state.settings.openaiProfiles.splice(index, 1, profile);
+  else state.settings.openaiProfiles.push(profile);
+  state.settings.activeOpenaiProfileId = profile.id;
+  syncActiveOpenaiSettings();
+  closeOpenaiEditor();
+  renderOpenaiProfiles();
+  await persist();
+}
+
+async function testOpenaiProfile() {
+  const button = $('#openaiTestButton');
+  const status = $('#openaiTestStatus');
+  button.disabled = true;
+  status.textContent = '正在测试...';
+  try {
+    await window.ntodo.testOpenAiConfig({
+      apiKey: $('#openaiApiKeyInput').value.trim(),
+      baseUrl: $('#openaiBaseUrlInput').value.trim() || 'https://api.openai.com/v1',
+      model: $('#openaiModelInput').value.trim() || 'gpt-4o-mini'
+    });
+    status.textContent = '连接正常';
+  } catch (error) {
+    status.textContent = error.message || '连接失败';
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function setInteractionMode(mode) {
@@ -313,6 +1070,7 @@ function renderSubtasks(container, task, readOnly = false) {
         await completeTask(task.id);
         return;
       }
+      markTodoChanged(task);
       await persist();
       render();
     });
@@ -331,6 +1089,7 @@ function renderSubtasks(container, task, readOnly = false) {
       deleteButton.append(createTrashIcon());
       deleteButton.addEventListener('click', async () => {
         task.subtasks = task.subtasks.filter((item) => item.id !== subtask.id);
+        markTodoChanged(task);
         await persist();
         render();
       });
@@ -432,6 +1191,7 @@ function renderTask(task) {
     event.preventDefault();
     task.dueDate = dueInput.value || '';
     dueForm.hidden = true;
+    markTodoChanged(task);
     await persist();
     render();
   });
@@ -440,6 +1200,7 @@ function renderTask(task) {
     task.dueDate = '';
     dueInput.value = '';
     dueForm.hidden = true;
+    markTodoChanged(task);
     await persist();
     render();
   });
@@ -451,6 +1212,7 @@ function renderTask(task) {
     task.subtasks.push({ id: uid(), title: value, done: false, createdAt: nowIso() });
     subtaskInput.value = '';
     subtaskForm.hidden = true;
+    markTodoChanged(task);
     await persist();
     render();
   });
@@ -496,10 +1258,21 @@ async function addTask(title, priority = state.priority, source = 'manual', dueD
   const task = {
     id: uid(),
     title: cleanTitle,
+    note: '',
+    completed: false,
     priority,
     source,
     dueDate: dueDate || '',
     createdAt: nowIso(),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+    deleted_at: null,
+    version: 1,
+    device_id: ensureSyncState().deviceId,
+    server_version: 0,
+    sync_status: 'pending',
+    list_id: null,
+    sort_order: Date.now(),
     subtasks: subtasks.map((subtask) => ({
       id: uid(),
       title: String(subtask || '').trim(),
@@ -507,6 +1280,7 @@ async function addTask(title, priority = state.priority, source = 'manual', dueD
       createdAt: nowIso()
     })).filter((subtask) => subtask.title)
   };
+  enqueueTodoChange(task, 'create');
   state.tasks.push(task);
   await persist();
   render();
@@ -519,6 +1293,7 @@ async function completeTask(id, element = null) {
   const [task] = state.tasks.splice(index, 1);
   task.completedAt = nowIso();
   task.subtasks = task.subtasks.map((subtask) => ({ ...subtask, done: true }));
+  markTodoChanged(task, 'update', true);
   state.completed.push(task);
   if (element) {
     element.classList.add('done');
@@ -534,18 +1309,43 @@ async function completeTask(id, element = null) {
 }
 
 async function deleteActiveTask(id) {
+  const task = state.tasks.find((item) => item.id === id);
+  if (task) {
+    const deletedAt = nowIso();
+    task.deleted_at = deletedAt;
+    task.updated_at = deletedAt;
+    if (Number(task.server_version) > 0) {
+      markTodoChanged(task, 'delete', false);
+      rememberDeletedTodo(task);
+    } else {
+      removePendingTodoChanges(task.id);
+    }
+  }
   state.tasks = state.tasks.filter((task) => task.id !== id);
   await persist();
   render();
 }
 
 async function deleteCompletedTask(id) {
+  const task = state.completed.find((item) => item.id === id);
+  if (task) {
+    const deletedAt = nowIso();
+    task.deleted_at = deletedAt;
+    task.updated_at = deletedAt;
+    if (Number(task.server_version) > 0) {
+      markTodoChanged(task, 'delete', true);
+      rememberDeletedTodo(task);
+    } else {
+      removePendingTodoChanges(task.id);
+    }
+  }
   state.completed = state.completed.filter((task) => task.id !== id);
   await persist();
   render();
 }
 
 async function parseTasksFromText(text, source = 'ai') {
+  ensureOpenaiProfiles();
   const parsed = await window.ntodo.parseNaturalTask({
     text,
     settings: state.settings,
@@ -702,21 +1502,23 @@ function bindEvents() {
     await persist();
   });
 
-  $('#openaiApiKeyInput').addEventListener('change', async (event) => {
-    state.settings.openaiApiKey = event.currentTarget.value.trim();
+  $('#syncEmailInput').addEventListener('change', async (event) => {
+    ensureSyncState().email = event.currentTarget.value.trim().toLowerCase();
     await persist();
+    updateSyncStatus();
   });
 
-  $('#openaiBaseUrlInput').addEventListener('change', async (event) => {
-    state.settings.openaiBaseUrl = event.currentTarget.value.trim() || 'https://api.openai.com/v1';
-    applySettings();
-    await persist();
-  });
+  $('#syncLoginButton').addEventListener('click', () => authenticateSync('login'));
+  $('#syncRegisterButton').addEventListener('click', () => authenticateSync('register'));
+  $('#syncNowButton').addEventListener('click', syncNow);
+  $('#syncLogoutButton').addEventListener('click', logoutSync);
 
-  $('#openaiModelInput').addEventListener('change', async (event) => {
-    state.settings.openaiModel = event.currentTarget.value.trim() || 'gpt-4o-mini';
-    applySettings();
-    await persist();
+  $('#openaiAddConfigButton').addEventListener('click', () => openOpenaiEditor());
+  $('#openaiSaveConfigButton').addEventListener('click', saveOpenaiProfile);
+  $('#openaiTestButton').addEventListener('click', testOpenaiProfile);
+  $('#openaiCancelEditButton').addEventListener('click', () => {
+    closeOpenaiEditor();
+    renderOpenaiProfiles();
   });
 
   $('#clipboardShortcutInput').addEventListener('change', async (event) => {
@@ -761,12 +1563,7 @@ function bindEvents() {
   });
 
   window.ntodo.onStoreChanged((store) => {
-    state.tasks = Array.isArray(store.tasks) ? store.tasks : [];
-    state.completed = Array.isArray(store.completed) ? store.completed : [];
-    state.settings = {
-      ...state.settings,
-      ...(store && typeof store.settings === 'object' ? store.settings : {})
-    };
+    loadStore(store);
     applySettings();
     render();
     showTaskFeedback('add');
@@ -777,12 +1574,8 @@ async function boot() {
   bindEvents();
   bindInteractionLayer();
   const stored = await window.ntodo.readStore();
-  state.tasks = Array.isArray(stored.tasks) ? stored.tasks : [];
-  state.completed = Array.isArray(stored.completed) ? stored.completed : [];
-  state.settings = {
-    ...state.settings,
-    ...(stored && typeof stored.settings === 'object' ? stored.settings : {})
-  };
+  loadStore(stored);
+  await persist();
   try {
     const loginSettings = await window.ntodo.getLoginItemSettings();
     state.settings.openAtLogin = Boolean(loginSettings.openAtLogin);
@@ -799,6 +1592,13 @@ async function boot() {
   });
   applyAddMode();
   render();
+  updateSyncStatus();
+  syncOnForeground();
+  window.addEventListener('focus', syncOnForeground);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncOnForeground();
+  });
+  window.addEventListener('online', syncOnForeground);
   showOnboardingIfNeeded();
 }
 

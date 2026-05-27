@@ -1,6 +1,6 @@
 {
   "name": "ntodo",
-  "version": "0.1.3",
+  "version": "1.0.0",
   "description": "Ntodo desktop sticky task note",
   "main": "src/main.js",
   "scripts": {
@@ -21,7 +21,7 @@
   "build": {
     "appId": "com.ntodo.desktop",
     "productName": "Ntodo",
-    "artifactName": "Ntodo-${version}.${ext}",
+    "artifactName": "Ntodo-1.0.${ext}",
     "directories": {
       "output": "release"
     },
@@ -46,7 +46,7 @@
       "shortcutName": "Ntodo",
       "installerIcon": "assets/ntodo.ico",
       "uninstallerIcon": "assets/ntodo.ico",
-      "artifactName": "Ntodo-Setup-${version}.${ext}"
+      "artifactName": "Ntodo-Setup-1.0.${ext}"
     }
   },
   "devDependencies": {

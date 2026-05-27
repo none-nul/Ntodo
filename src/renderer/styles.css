@@ -1006,6 +1006,193 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   color: #1c7c68;
 }
 
+.api-manager {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(52, 45, 34, 0.08);
+}
+
+.api-manager-head,
+.api-profile-item,
+.api-editor-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.api-manager-head {
+  justify-content: space-between;
+}
+
+.api-manager-head strong {
+  display: block;
+  font-size: 13px;
+}
+
+.api-manager-head small {
+  color: #7a7265;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.api-profile-list,
+.api-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.api-profile-item {
+  padding: 8px;
+  border: 1px solid rgba(52, 45, 34, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.api-profile-item.active {
+  border-color: rgba(28, 124, 104, 0.42);
+  background: rgba(28, 124, 104, 0.08);
+}
+
+.api-profile-main {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.api-profile-main strong,
+.api-profile-main small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-profile-main strong {
+  color: #26231d;
+  font-size: 12px;
+}
+
+.api-profile-main small,
+.api-profile-empty {
+  color: #7a7265;
+  font-size: 11px;
+}
+
+.api-profile-action,
+.api-editor-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(52, 45, 34, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: #343027;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.api-profile-action.danger {
+  color: #b94332;
+}
+
+.api-editor {
+  padding: 10px;
+  border: 1px solid rgba(28, 124, 104, 0.22);
+  border-radius: 12px;
+  background: rgba(28, 124, 104, 0.06);
+}
+
+.api-editor[hidden] {
+  display: none;
+}
+
+.api-editor-actions {
+  flex-wrap: wrap;
+}
+
+.api-editor-actions .primary-button {
+  width: auto;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.sync-error-box {
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(185, 67, 50, 0.22);
+  border-radius: 9px;
+  background: rgba(185, 67, 50, 0.08);
+  color: #b94332;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.sync-error-box[hidden] {
+  display: none;
+}
+
+.sync-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(52, 45, 34, 0.08);
+}
+
+.sync-actions button {
+  min-height: 34px;
+  border: 1px solid rgba(52, 45, 34, 0.12);
+  border-radius: 9px;
+  background: #fff;
+  color: #343027;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sync-actions button:first-child,
+.sync-actions button:last-child {
+  background: #1c7c68;
+  color: #fff;
+}
+
+.sync-actions button:last-child {
+  grid-column: 1 / -1;
+}
+
+.sync-actions button[hidden] {
+  display: none;
+}
+
+.sync-account-panel {
+  display: flex;
+  gap: 12px;
+  padding: 0 0 10px;
+}
+
+.sync-account-panel[hidden],
+#syncGuestFields[hidden],
+#syncIntervalRow[hidden] {
+  display: none;
+}
+
+.sync-account-panel strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #1c7c68;
+  font-size: 14px;
+}
+
+.sync-account-panel small {
+  display: block;
+  margin-top: 3px;
+  color: #776d5c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 
 .onboarding[hidden] {
   display: none;
