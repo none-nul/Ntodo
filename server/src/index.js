@@ -2,9 +2,15 @@ const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
 const express = require('express');
+const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
 const { accountPageHandler } = require('./account-page');
 const { marketingPageHandler, windowsDownloadsPageHandler } = require('./marketing-pages');
+
+function envNumber(name, fallback, min = Number.NEGATIVE_INFINITY) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? Math.max(min, value) : fallback;
+}
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://ntodo:ntodo_password@postgres:5432/ntodo';
@@ -17,12 +23,27 @@ const ALLOWED_ORIGINS = new Set(
 );
 const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_RATE_LIMIT_MAX = Number(process.env.AUTH_RATE_LIMIT_MAX || 20);
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '';
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = envNumber('SMTP_PORT', 587, 1);
+const SMTP_SECURE = /^true$/i.test(String(process.env.SMTP_SECURE || 'false'));
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || 'verify@nonenull.top';
+const SMTP_TIMEOUT_MS = envNumber('SMTP_TIMEOUT_MS', 10 * 1000, 1000);
+const SMTP_TLS_REJECT_UNAUTHORIZED = !/^false$/i.test(String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true'));
+const REGISTER_CODE_TTL_MINUTES = envNumber('REGISTER_CODE_TTL_MINUTES', 10, 1);
+const REGISTER_CODE_MAX_ATTEMPTS = envNumber('REGISTER_CODE_MAX_ATTEMPTS', 5, 1);
+const REGISTER_CODE_EMAIL_COOLDOWN_MS = envNumber('REGISTER_CODE_EMAIL_COOLDOWN_MS', 60 * 1000, 0);
+const REGISTER_CODE_EMAIL_HOURLY_MAX = envNumber('REGISTER_CODE_EMAIL_HOURLY_MAX', 5, 1);
 const DOWNLOAD_ROOT = process.env.DOWNLOAD_ROOT || path.join(__dirname, '..', 'downloads');
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const app = express();
 app.set('trust proxy', 1);
 const authRateBuckets = new Map();
+let mailTransporter;
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -59,6 +80,211 @@ function uuid(value) {
 
 function badRequest(res, code, message, details) {
   return res.status(400).json({ error: { code, message, details } });
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ''));
+}
+
+function publicIp(req) {
+  return String(req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '') || 'unknown';
+}
+
+function hashEmailCode(email, code) {
+  return crypto
+    .createHmac('sha256', JWT_SECRET)
+    .update(`${normalizeEmail(email)}:${String(code || '').trim()}`)
+    .digest('hex');
+}
+
+function mailer() {
+  if (!SMTP_HOST) {
+    const error = new Error('SMTP_HOST is not configured');
+    error.code = 'MAIL_NOT_CONFIGURED';
+    throw error;
+  }
+  if (!mailTransporter) {
+    const transport = {
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      connectionTimeout: SMTP_TIMEOUT_MS,
+      greetingTimeout: SMTP_TIMEOUT_MS,
+      socketTimeout: SMTP_TIMEOUT_MS,
+      tls: {
+        rejectUnauthorized: SMTP_TLS_REJECT_UNAUTHORIZED
+      }
+    };
+    if (SMTP_USER || SMTP_PASS) {
+      transport.auth = { user: SMTP_USER, pass: SMTP_PASS };
+    }
+    mailTransporter = nodemailer.createTransport(transport);
+  }
+  return mailTransporter;
+}
+
+function registerCodeMessage(code) {
+  const text = [
+    `Your Ntodo verification code is ${code}.`,
+    '',
+    `This code expires in ${REGISTER_CODE_TTL_MINUTES} minutes.`,
+    'If you did not request this code, you can ignore this email.'
+  ].join('\n');
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#17202a">
+      <h2 style="margin:0 0 12px">Ntodo verification code</h2>
+      <p>Your verification code is:</p>
+      <p style="font-size:28px;font-weight:700;letter-spacing:4px;margin:16px 0">${code}</p>
+      <p>This code expires in ${REGISTER_CODE_TTL_MINUTES} minutes.</p>
+      <p style="color:#667085">If you did not request this code, you can ignore this email.</p>
+    </div>`;
+  return { text, html };
+}
+
+async function sendRegisterCodeEmail(email, code) {
+  const message = registerCodeMessage(code);
+  await mailer().sendMail({
+    from: SMTP_FROM,
+    to: email,
+    subject: 'Ntodo verification code',
+    text: message.text,
+    html: message.html
+  });
+}
+
+async function verifyTurnstile(token, remoteIp) {
+  if (!TURNSTILE_SECRET_KEY) {
+    const error = new Error('TURNSTILE_SECRET_KEY is not configured');
+    error.code = 'TURNSTILE_NOT_CONFIGURED';
+    throw error;
+  }
+  if (!token) return { ok: false, details: ['missing-input-response'] };
+
+  const body = new URLSearchParams({
+    secret: TURNSTILE_SECRET_KEY,
+    response: token
+  });
+  if (remoteIp && remoteIp !== 'unknown') body.set('remoteip', remoteIp);
+
+  const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    body
+  });
+  const data = await response.json().catch(() => null);
+  return {
+    ok: Boolean(response.ok && data?.success),
+    details: data?.['error-codes'] || []
+  };
+}
+
+function challengePageHtml() {
+  const siteKey = TURNSTILE_SITE_KEY;
+  const body = siteKey
+    ? `<div class="cf-turnstile" data-sitekey="${escapeHtml(siteKey)}" data-callback="onTurnstileToken" data-theme="light"></div>`
+    : '<p class="error">Turnstile site key is not configured.</p>';
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ntodo Verification</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <style>
+    body{margin:0;min-height:120px;display:grid;place-items:center;background:#fff;color:#111827;font-family:Arial,sans-serif}
+    .error{margin:0;padding:12px;color:#b42318;font-size:13px}
+  </style>
+</head>
+<body>
+  ${body}
+  <script>
+    function onTurnstileToken(token) {
+      try { window.parent && window.parent.postMessage({ type: 'NTODO_TURNSTILE_TOKEN', token: token }, '*'); } catch {}
+      try { window.NtodoTurnstile && window.NtodoTurnstile.onToken(token); } catch {}
+    }
+  </script>
+</body>
+</html>`;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function enforceRegisterCodeEmailLimit(client, email) {
+  const recent = await client.query(
+    `SELECT created_at
+     FROM email_verification_codes
+     WHERE email = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [email]
+  );
+  if (recent.rowCount && Date.now() - new Date(recent.rows[0].created_at).getTime() < REGISTER_CODE_EMAIL_COOLDOWN_MS) {
+    return { ok: false, code: 'CODE_RECENTLY_SENT', message: 'Please wait before requesting another code.' };
+  }
+
+  const hourly = await client.query(
+    `SELECT COUNT(*)::int AS count
+     FROM email_verification_codes
+     WHERE email = $1 AND created_at > now() - interval '1 hour'`,
+    [email]
+  );
+  if (Number(hourly.rows[0]?.count || 0) >= REGISTER_CODE_EMAIL_HOURLY_MAX) {
+    return { ok: false, code: 'CODE_RATE_LIMITED', message: 'Too many verification codes requested. Please try again later.' };
+  }
+  return { ok: true };
+}
+
+async function consumeRegisterCode(client, email, code) {
+  const result = await client.query(
+    `SELECT id, code_hash, attempts, expires_at
+     FROM email_verification_codes
+     WHERE email = $1 AND consumed_at IS NULL
+     ORDER BY created_at DESC
+     LIMIT 1
+     FOR UPDATE`,
+    [email]
+  );
+  if (!result.rowCount) {
+    return { ok: false, status: 400, code: 'INVALID_CODE', message: 'Invalid or expired verification code' };
+  }
+
+  const row = result.rows[0];
+  const expired = new Date(row.expires_at).getTime() <= Date.now();
+  if (expired) {
+    await client.query('UPDATE email_verification_codes SET consumed_at = now() WHERE id = $1', [row.id]);
+    return { ok: false, status: 400, code: 'CODE_EXPIRED', message: 'Verification code has expired' };
+  }
+
+  if (Number(row.attempts) >= REGISTER_CODE_MAX_ATTEMPTS) {
+    await client.query('UPDATE email_verification_codes SET consumed_at = now() WHERE id = $1', [row.id]);
+    return { ok: false, status: 429, code: 'CODE_ATTEMPTS_EXCEEDED', message: 'Too many verification attempts. Request a new code.' };
+  }
+
+  const expected = Buffer.from(row.code_hash, 'hex');
+  const actual = Buffer.from(hashEmailCode(email, code), 'hex');
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+    const nextAttempts = Number(row.attempts) + 1;
+    await client.query(
+      `UPDATE email_verification_codes
+       SET attempts = attempts + 1,
+           consumed_at = CASE WHEN $2 >= $3 THEN now() ELSE consumed_at END
+       WHERE id = $1`,
+      [row.id, nextAttempts, REGISTER_CODE_MAX_ATTEMPTS]
+    );
+    return { ok: false, status: 400, code: 'INVALID_CODE', message: 'Invalid or expired verification code' };
+  }
+
+  await client.query('UPDATE email_verification_codes SET consumed_at = now() WHERE id = $1', [row.id]);
+  return { ok: true };
 }
 
 function base64url(input) {
@@ -183,16 +409,108 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'ntodo-sync' });
 });
 
+app.get('/auth/register/challenge', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(challengePageHtml());
+});
+
+app.post('/auth/register/code', rateLimitAuth, async (req, res, next) => {
+  const email = normalizeEmail(req.body.email);
+  const token = String(req.body.cf_turnstile_token || req.body.turnstile_token || '').trim();
+  const ip = publicIp(req);
+
+  if (!validEmail(email)) return badRequest(res, 'INVALID_EMAIL', 'Valid email is required');
+
+  try {
+    const turnstile = await verifyTurnstile(token, ip);
+    if (!turnstile.ok) {
+      return res.status(400).json({
+        error: {
+          code: 'TURNSTILE_FAILED',
+          message: 'Human verification failed. Please try again.',
+          details: turnstile.details
+        }
+      });
+    }
+  } catch (error) {
+    if (error.code === 'TURNSTILE_NOT_CONFIGURED') {
+      return res.status(500).json({ error: { code: 'TURNSTILE_NOT_CONFIGURED', message: 'Turnstile is not configured' } });
+    }
+    return next(error);
+  }
+
+  const client = await pool.connect();
+  try {
+    const limit = await enforceRegisterCodeEmailLimit(client, email);
+    if (!limit.ok) {
+      return res.status(429).json({ error: { code: limit.code, message: limit.message } });
+    }
+
+    const existing = await client.query('SELECT 1 FROM users WHERE email = $1', [email]);
+    if (existing.rowCount) {
+      return res.json({
+        ok: true,
+        message: 'If this email can be registered, a verification code will be sent.'
+      });
+    }
+
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const inserted = await client.query(
+      `INSERT INTO email_verification_codes (email, code_hash, sent_ip, expires_at)
+       VALUES ($1, $2, $3, now() + ($4::text || ' minutes')::interval)
+       RETURNING id`,
+      [email, hashEmailCode(email, code), ip, REGISTER_CODE_TTL_MINUTES]
+    );
+
+    try {
+      await sendRegisterCodeEmail(email, code);
+    } catch (error) {
+      await client.query('UPDATE email_verification_codes SET consumed_at = now() WHERE id = $1', [inserted.rows[0].id]).catch(() => {});
+      console.error('Verification email send failed', {
+        code: error.code,
+        command: error.command,
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        message: error.message
+      });
+      if (error.code === 'MAIL_NOT_CONFIGURED') {
+        return res.status(500).json({ error: { code: 'MAIL_NOT_CONFIGURED', message: 'SMTP is not configured' } });
+      }
+      return res.status(502).json({ error: { code: 'MAIL_SEND_FAILED', message: 'Verification email could not be sent', details: { reason: error.code || 'SMTP_ERROR' } } });
+    }
+
+    res.json({
+      ok: true,
+      expires_in_seconds: REGISTER_CODE_TTL_MINUTES * 60,
+      message: 'Verification code sent.'
+    });
+  } catch (error) {
+    next(error);
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/auth/register', rateLimitAuth, async (req, res, next) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
+  const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const name = String(req.body.name || '').trim() || null;
-  if (!email || !email.includes('@')) return badRequest(res, 'INVALID_EMAIL', 'Valid email is required');
+  const code = String(req.body.code || '').trim();
+  if (!validEmail(email)) return badRequest(res, 'INVALID_EMAIL', 'Valid email is required');
   if (password.length < 8) return badRequest(res, 'WEAK_PASSWORD', 'Password must be at least 8 characters');
+  if (!/^\d{6}$/.test(code)) return badRequest(res, 'INVALID_CODE', 'Verification code is required');
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const verification = await consumeRegisterCode(client, email, code);
+    if (!verification.ok) {
+      await client.query('COMMIT');
+      return res.status(verification.status).json({
+        error: { code: verification.code, message: verification.message }
+      });
+    }
     const user = await client.query(
       'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name',
       [email, hashPassword(password), name]
@@ -543,6 +861,9 @@ app.get('/sync/status', auth, async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
+  if (error.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' } });
+  }
   if (error.status === 404 || error.statusCode === 404 || error.code === 'ENOENT') {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } });
   }

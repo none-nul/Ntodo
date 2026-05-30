@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -17,47 +17,47 @@
           </div>
         </div>
         <div class="window-actions">
-          <button id="pinButton" class="icon-button active" title="濮嬬粓缃《" aria-label="濮嬬粓缃《">
+          <button id="pinButton" class="icon-button active" title="始终置顶" aria-label="始终置顶">
             <svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M9 4h6M10 4l1 6-3 3h8l-3-3 1-6"></path>
               <path d="M12 13v6"></path>
             </svg>
           </button>
-          <button id="settingsButton" class="icon-button" title="璁剧疆" aria-label="璁剧疆">
+          <button id="settingsButton" class="icon-button" title="设置" aria-label="设置">
             <svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4Z"></path>
               <path d="M13.8 3.8h-3.6l-.5 2.1c-.5.2-1 .5-1.5.9l-2.1-.7-1.8 3.1 1.6 1.5a6.8 6.8 0 0 0 0 1.8l-1.6 1.5 1.8 3.1 2.1-.7c.5.4 1 .7 1.5.9l.5 2.1h3.6l.5-2.1c.5-.2 1-.5 1.5-.9l2.1.7 1.8-3.1-1.6-1.5a6.8 6.8 0 0 0 0-1.8l1.6-1.5-1.8-3.1-2.1.7c-.5-.4-1-.7-1.5-.9l-.5-2.1Z"></path>
             </svg>
           </button>
-          <button id="minButton" class="icon-button" title="鏈€灏忓寲" aria-label="鏈€灏忓寲">-</button>
-          <button id="closeButton" class="icon-button danger" title="鍏抽棴" aria-label="鍏抽棴">x</button>
+          <button id="minButton" class="icon-button" title="最小化" aria-label="最小化">-</button>
+          <button id="closeButton" class="icon-button danger" title="关闭" aria-label="关闭">x</button>
         </div>
       </header>
 
       <form id="quickAddForm" class="quick-add">
-        <div class="add-mode-switch" aria-label="娣诲姞妯″紡">
-          <button class="add-mode-option active" type="button" data-mode="manual">鎵嬪姩</button>
+        <div class="add-mode-switch" aria-label="添加模式">
+          <button class="add-mode-option active" type="button" data-mode="manual">手动</button>
           <button class="add-mode-option" type="button" data-mode="ai">AI</button>
         </div>
-        <textarea id="taskInput" placeholder="娣诲姞鐜板湪瑕佸仛鐨勪簨" maxlength="260" rows="1"></textarea>
+        <textarea id="taskInput" placeholder="添加现在要做的事" maxlength="260" rows="1"></textarea>
         <div class="manual-controls">
-          <input id="dueDateInput" class="due-date-input" type="date" title="鎴鏃堕棿" />
-          <div class="priority-picker" aria-label="浼樺厛绾?>
-            <button class="priority-option high active" type="button" data-priority="3">楂?/button>
-            <button class="priority-option medium" type="button" data-priority="2">涓?/button>
-            <button class="priority-option low" type="button" data-priority="1">浣?/button>
+          <input id="dueDateInput" class="due-date-input" type="date" title="截止时间" />
+          <div class="priority-picker" aria-label="优先级">
+            <button class="priority-option high active" type="button" data-priority="3">高</button>
+            <button class="priority-option medium" type="button" data-priority="2">中</button>
+            <button class="priority-option low" type="button" data-priority="1">低</button>
           </div>
-          <button id="addTaskButton" class="primary-button" type="submit">娣诲姞</button>
+          <button id="addTaskButton" class="primary-button" type="submit">添加</button>
         </div>
         <div class="ai-controls" hidden>
-          <button id="aiAddButton" class="ai-button" type="button">瑙ｆ瀽骞舵坊鍔?/button>
+          <button id="aiAddButton" class="ai-button" type="button">解析并添加</button>
         </div>
       </form>
 
       <section class="toolbar">
         <div class="tabs" role="tablist">
-          <button class="tab active" type="button" data-view="active">寰呭畬鎴?/button>
-          <button class="tab" type="button" data-view="completed">宸插畬鎴?/button>
+          <button class="tab active" type="button" data-view="active">待完成</button>
+          <button class="tab" type="button" data-view="completed">已完成</button>
         </div>
       </section>
 
@@ -70,10 +70,10 @@
 
     <section id="onboarding" class="onboarding" hidden>
       <div class="guide-card">
-        <div class="guide-kicker">绗竴娆′娇鐢?/div>
-        <h2>鎶婂畠鏀惧湪鍙充笂瑙掞紝鍒浠诲姟鍗犳弧娉ㄦ剰鍔涖€?/h2>
-        <p>娣诲姞浠诲姟銆侀€夋嫨浼樺厛绾с€傞珮浼樺厛绾т細鑷姩鎺掑湪鍓嶉潰锛涚偣浠诲姟鍙充晶鍔犲彿鍙互娣诲姞瀛愰」鐩紱瀹屾垚鍚庝細杩涘叆宸插畬鎴愯褰曘€?/p>
-        <button id="guideDoneButton" type="button">鐭ラ亾浜?/button>
+        <div class="guide-kicker">第一次使用</div>
+        <h2>把它放在右上角，别让任务占满注意力。</h2>
+        <p>添加任务、选择优先级。高优先级会自动排在前面；点任务右侧加号可以添加子项目；完成后会进入已完成记录。</p>
+        <button id="guideDoneButton" type="button">知道了</button>
       </div>
     </section>
 
@@ -81,17 +81,17 @@
       <div class="settings-card">
         <header class="settings-head">
           <div>
-            <div class="guide-kicker">璁剧疆</div>
-            <h2>Ntodo 鍋忓ソ</h2>
+            <div class="guide-kicker">设置</div>
+            <h2>Ntodo 偏好</h2>
           </div>
-          <button id="settingsCloseButton" class="icon-button" title="鍏抽棴璁剧疆" aria-label="鍏抽棴璁剧疆">x</button>
+          <button id="settingsCloseButton" class="icon-button" title="关闭设置" aria-label="关闭设置">x</button>
         </header>
 
         <div class="settings-layout">
-          <nav class="settings-menu" aria-label="璁剧疆鍒嗙被">
-            <button class="settings-menu-item active" type="button" data-settings-section="general">閫氱敤</button>
-            <button class="settings-menu-item" type="button" data-settings-section="tasks">浠诲姟</button>
-            <button class="settings-menu-item" type="button" data-settings-section="sync">鍚屾</button>
+          <nav class="settings-menu" aria-label="设置分类">
+            <button class="settings-menu-item active" type="button" data-settings-section="general">通用</button>
+            <button class="settings-menu-item" type="button" data-settings-section="tasks">任务</button>
+            <button class="settings-menu-item" type="button" data-settings-section="sync">同步</button>
             <button class="settings-menu-item" type="button" data-settings-section="ai">AI</button>
           </nav>
 
@@ -99,16 +99,16 @@
             <section class="settings-section active" data-settings-section="general">
               <label class="setting-row">
                 <span>
-                  <strong>寮€鏈鸿嚜鍔ㄥ惎鍔?/strong>
-                  <small>瀹夎鐗堢敓鏁堬紝寮€鍙戞ā寮忓彲鑳藉彈绯荤粺闄愬埗銆?/small>
+                  <strong>开机自动启动</strong>
+                  <small>安装版生效，开发模式可能受系统限制。</small>
                 </span>
                 <input id="openAtLoginToggle" type="checkbox" />
               </label>
 
               <label class="setting-column">
                 <span>
-                  <strong>杩滅涓嶉€忔槑搴?/strong>
-                  <small>鍏夋爣瀹屽叏涓嶅湪闄勮繎鏃讹紝绐楀彛鏇存贰骞堕粯璁ょ偣鍑荤┛閫忋€?/small>
+                  <strong>远离不透明度</strong>
+                  <small>光标完全不在附近时，窗口更淡并默认点击穿透。</small>
                 </span>
                 <div class="range-row">
                   <input id="farOpacityRange" type="range" min="22" max="80" step="2" />
@@ -118,8 +118,8 @@
 
               <label class="setting-column">
                 <span>
-                  <strong>闈犺繎涓嶉€忔槑搴?/strong>
-                  <small>鍏夋爣杩涘叆绐楀彛鑼冨洿浣嗚繕娌℃湁鎿嶄綔鏃剁殑閫忔槑绋嬪害銆?/small>
+                  <strong>靠近不透明度</strong>
+                  <small>光标进入窗口范围但还没有操作时的透明程度。</small>
                 </span>
                 <div class="range-row">
                   <input id="nearOpacityRange" type="range" min="35" max="92" step="2" />
@@ -129,8 +129,8 @@
 
               <label class="setting-column">
                 <span>
-                  <strong>鎿嶄綔涓嶉€忔槑搴?/strong>
-                  <small>鐐瑰嚮鎺т欢杩涘叆鎿嶄綔鐘舵€佸悗鐨勬竻鏅扮▼搴︺€?/small>
+                  <strong>操作不透明度</strong>
+                  <small>点击控件进入操作状态后的清晰程度。</small>
                 </span>
                 <div class="range-row">
                   <input id="activeOpacityRange" type="range" min="65" max="98" step="2" />
@@ -142,8 +142,8 @@
             <section class="settings-section" data-settings-section="tasks">
               <label class="setting-row">
                 <span>
-                  <strong>瀛愪换鍔″畬鎴愬悗瀹屾垚涓讳换鍔?/strong>
-                  <small>褰撲竴涓换鍔＄殑鎵€鏈夊瓙椤圭洰閮藉嬀閫夊畬鎴愭椂锛岃嚜鍔ㄦ妸涓讳换鍔＄Щ鍏ュ凡瀹屾垚銆?/small>
+                  <strong>子任务完成后完成主任务</strong>
+                  <small>当一个任务的所有子项目都勾选完成时，自动把主任务移入已完成。</small>
                 </span>
                 <input id="autoCompleteParentToggle" type="checkbox" />
               </label>
@@ -152,22 +152,76 @@
             <section class="settings-section" data-settings-section="sync">
               <div id="syncErrorBox" class="sync-error-box" hidden></div>
 
-              <div id="syncGuestFields">
-                <label class="setting-column">
-                  <span>
-                    <strong>閭</strong>
-                    <small>鍚屼竴涓处鍙峰彲鍦ㄥ涓澶囩櫥褰曘€?/small>
-                  </span>
-                  <input id="syncEmailInput" class="setting-input" type="email" placeholder="you@example.com" autocomplete="username" />
-                </label>
+              <div id="syncAuthSwitch" class="sync-auth-switch">
+                <button id="syncLoginModeButton" class="active" type="button">登录</button>
+                <button id="syncRegisterModeButton" type="button">注册</button>
+              </div>
 
-                <label class="setting-column">
-                  <span>
-                    <strong>瀵嗙爜</strong>
-                    <small>鑷冲皯 8 浣嶃€?/small>
+              <div id="syncGuestFields" class="sync-auth-grid">
+                <section id="syncLoginPanel" class="sync-auth-panel" aria-labelledby="syncLoginTitle">
+                  <span class="sync-auth-title">
+                    <strong id="syncLoginTitle">登录</strong>
+                    <small>已有账号时，使用登录邮箱和密码。</small>
                   </span>
-                  <input id="syncPasswordInput" class="setting-input" type="password" placeholder="Password" autocomplete="current-password" />
-                </label>
+
+                  <label class="setting-column">
+                    <span>
+                      <strong>登录邮箱</strong>
+                      <small>同一个账号可在多个设备登录。</small>
+                    </span>
+                    <input id="syncLoginEmailInput" class="setting-input" type="email" placeholder="you@example.com" autocomplete="username" />
+                  </label>
+
+                  <label class="setting-column">
+                    <span>
+                      <strong>密码</strong>
+                      <small>登录密码。</small>
+                    </span>
+                    <input id="syncLoginPasswordInput" class="setting-input" type="password" placeholder="Password" autocomplete="current-password" />
+                  </label>
+
+                  <button id="syncLoginButton" type="button">登录</button>
+                </section>
+
+                <section id="syncRegisterPanel" class="sync-auth-panel" aria-labelledby="syncRegisterTitle" hidden>
+                  <span class="sync-auth-title">
+                    <strong id="syncRegisterTitle">注册</strong>
+                    <small>先完成人机验证并发送邮箱验证码。</small>
+                  </span>
+
+                  <label class="setting-column">
+                    <span>
+                      <strong>注册邮箱</strong>
+                      <small>验证码会发送到这个邮箱。</small>
+                    </span>
+                    <input id="syncRegisterEmailInput" class="setting-input" type="email" placeholder="you@example.com" autocomplete="email" />
+                  </label>
+
+                  <label class="setting-column">
+                    <span>
+                      <strong>密码</strong>
+                      <small>至少 8 位。</small>
+                    </span>
+                    <input id="syncRegisterPasswordInput" class="setting-input" type="password" placeholder="Password" autocomplete="new-password" />
+                  </label>
+
+                  <label class="setting-column">
+                    <span>
+                      <strong>验证码</strong>
+                      <small>邮箱验证通过后才会创建账号。</small>
+                    </span>
+                    <input id="syncCodeInput" class="setting-input" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
+                  </label>
+
+                  <div class="sync-turnstile">
+                    <iframe id="syncTurnstileFrame" title="Ntodo human verification"></iframe>
+                  </div>
+
+                  <div class="sync-register-actions">
+                    <button id="syncSendCodeButton" type="button">发送验证码</button>
+                    <button id="syncRegisterButton" type="button">注册</button>
+                  </div>
+                </section>
               </div>
 
               <div id="syncAccountPanel" class="sync-account-panel" hidden>
@@ -178,17 +232,14 @@
               </div>
 
               <div class="sync-actions">
-                <button id="syncLoginButton" type="button">鐧诲綍</button>
-                <button id="syncRegisterButton" type="button">娉ㄥ唽</button>
-                <button id="syncNowButton" type="button">绔嬪嵆鍚屾</button>
-                <button id="syncLogoutButton" type="button" hidden>娉ㄩ攢</button>
+                <button id="syncNowButton" type="button">立即同步</button>
+                <button id="syncLogoutButton" type="button" hidden>注销</button>
               </div>
 
               <small id="syncStatusText" class="setting-status"></small>
             </section>
 
             <section class="settings-section" data-settings-section="ai">
-
               <div class="api-manager">
                 <div class="api-manager-head">
                   <span>
@@ -233,10 +284,11 @@
                   <small id="openaiTestStatus" class="setting-status"></small>
                 </div>
               </div>
+
               <label class="setting-column">
                 <span>
-                  <strong>鍓创鏉?AI 蹇嵎閿?/strong>
-                  <small>澶嶅埗鏂囧瓧鍚庢寜姝ゅ揩鎹烽敭锛屼細鍦ㄩ紶鏍囦綅缃敓鎴愬彲缂栬緫纭妗嗐€?/small>
+                  <strong>剪贴板 AI 快捷键</strong>
+                  <small>复制文字后按此快捷键，会在鼠标位置生成可编辑确认框。</small>
                 </span>
                 <input id="clipboardShortcutInput" class="setting-input" type="text" placeholder="Ctrl+Alt+T" />
                 <small id="clipboardShortcutStatus" class="setting-status"></small>
@@ -249,12 +301,12 @@
 
     <section id="closeChoicePanel" class="close-choice-panel" hidden>
       <div class="close-choice-card">
-        <h2>鍏抽棴 Ntodo</h2>
-        <p>閫夋嫨缂╁皬鍒版墭鐩樼户缁繍琛岋紝鎴栬€呭畬鍏ㄩ€€鍑虹▼搴忋€?/p>
+        <h2>关闭 Ntodo</h2>
+        <p>选择缩小到托盘继续运行，或者完全退出程序。</p>
         <div class="close-choice-actions">
-          <button id="closeToTrayButton" type="button">缂╁皬鍒版墭鐩?/button>
-          <button id="quitAppButton" class="danger-action" type="button">瀹屽叏鍏抽棴</button>
-          <button id="closeChoiceCancel" type="button">鍙栨秷</button>
+          <button id="closeToTrayButton" type="button">缩小到托盘</button>
+          <button id="quitAppButton" class="danger-action" type="button">完全关闭</button>
+          <button id="closeChoiceCancel" type="button">取消</button>
         </div>
       </div>
     </section>
@@ -267,19 +319,19 @@
             <div class="task-title"></div>
             <div class="task-meta"></div>
             <div class="task-actions">
-              <button class="small-button due-toggle" type="button" title="璁剧疆鎴鏃ユ湡" aria-label="璁剧疆鎴鏃ユ湡">
+              <button class="small-button due-toggle" type="button" title="设置截止日期" aria-label="设置截止日期">
                 <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="5" y="6" width="14" height="13" rx="3"></rect>
                   <path d="M8 4v4M16 4v4M5 10h14"></path>
                   <path d="M9 14h1M14 14h1"></path>
                 </svg>
               </button>
-              <button class="small-button subtask-toggle" type="button" title="娣诲姞瀛愰」鐩? aria-label="娣诲姞瀛愰」鐩?>
+              <button class="small-button subtask-toggle" type="button" title="添加子项目" aria-label="添加子项目">
                 <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 6v12M6 12h12"></path>
                 </svg>
               </button>
-              <button class="small-button delete-task" type="button" title="鍒犻櫎浠诲姟" aria-label="鍒犻櫎浠诲姟">
+              <button class="small-button delete-task" type="button" title="删除任务" aria-label="删除任务">
                 <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7 8h10M10 8V6h4v2M9 10v7M15 10v7"></path>
                   <path d="M8 8l1 11h6l1-11"></path>
@@ -289,13 +341,13 @@
           </div>
         </div>
         <form class="due-date-form" hidden>
-          <input type="date" title="鎴鏃堕棿" />
-          <button type="submit">淇濆瓨</button>
-          <button class="clear-due" type="button" title="娓呴櫎鎴鏃堕棿" aria-label="娓呴櫎鎴鏃堕棿">x</button>
+          <input type="date" title="截止时间" />
+          <button type="submit">保存</button>
+          <button class="clear-due" type="button" title="清除截止时间" aria-label="清除截止时间">x</button>
         </form>
         <form class="subtask-form" hidden>
-          <input type="text" placeholder="娣诲姞瀛愰」鐩? maxlength="100" />
-          <button type="submit">鍔犲叆</button>
+          <input type="text" placeholder="添加子项目" maxlength="100" />
+          <button type="submit">加入</button>
         </form>
         <div class="subtasks"></div>
       </article>

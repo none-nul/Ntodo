@@ -47,6 +47,11 @@ const priorityConfig = {
 };
 
 const $ = (selector) => document.querySelector(selector);
+const SYNC_CHALLENGE_URL = 'https://api.nonenull.top/auth/register/challenge';
+let syncTurnstileToken = '';
+let syncCodeCooldownTimer = null;
+let syncCodeCooldownUntil = 0;
+let syncAuthMode = 'login';
 const activeView = $('#activeView');
 const completedView = $('#completedView');
 const taskTemplate = $('#taskTemplate');
@@ -358,10 +363,21 @@ function updateSyncStatus() {
     errorBox.hidden = !sync.lastError;
   }
   $('#syncGuestFields').hidden = isLoggedIn;
+  const syncAuthSwitch = $('#syncAuthSwitch');
+  if (syncAuthSwitch) syncAuthSwitch.hidden = isLoggedIn;
+  const loginPanel = $('#syncLoginPanel');
+  const registerPanel = $('#syncRegisterPanel');
+  if (loginPanel) loginPanel.hidden = isLoggedIn || syncAuthMode !== 'login';
+  if (registerPanel) registerPanel.hidden = isLoggedIn || syncAuthMode !== 'register';
+  const loginModeButton = $('#syncLoginModeButton');
+  const registerModeButton = $('#syncRegisterModeButton');
+  if (loginModeButton) loginModeButton.classList.toggle('active', syncAuthMode === 'login');
+  if (registerModeButton) registerModeButton.classList.toggle('active', syncAuthMode === 'register');
   $('#syncAccountPanel').hidden = !isLoggedIn;
   const syncIntervalRow = $('#syncIntervalRow');
   if (syncIntervalRow) syncIntervalRow.hidden = true;
   $('#syncLoginButton').hidden = isLoggedIn;
+  $('#syncSendCodeButton').hidden = isLoggedIn;
   $('#syncRegisterButton').hidden = isLoggedIn;
   $('#syncLogoutButton').hidden = !isLoggedIn;
   if (isLoggedIn) {
@@ -372,6 +388,16 @@ function updateSyncStatus() {
   if (statusText) statusText.textContent = syncSummary();
   const syncButton = $('#syncNowButton');
   if (syncButton) syncButton.disabled = sync.status === 'syncing' || !sync.accessToken;
+  const sendCodeButton = $('#syncSendCodeButton');
+  if (sendCodeButton && Date.now() >= syncCodeCooldownUntil) {
+    sendCodeButton.disabled = sync.status === 'syncing' || isLoggedIn;
+  }
+}
+
+function setSyncAuthMode(mode) {
+  syncAuthMode = mode === 'register' ? 'register' : 'login';
+  ensureSyncState().lastError = '';
+  updateSyncStatus();
 }
 
 async function apiCall(pathName, options = {}) {
@@ -393,6 +419,85 @@ async function apiCall(pathName, options = {}) {
   return response.data;
 }
 
+function reloadSyncTurnstileFrame() {
+  syncTurnstileToken = '';
+  const frame = $('#syncTurnstileFrame');
+  if (frame) frame.src = `${SYNC_CHALLENGE_URL}?t=${Date.now()}`;
+}
+
+function setupSyncTurnstile() {
+  window.addEventListener('message', (event) => {
+    if (event.origin !== 'https://api.nonenull.top' && event.origin !== 'https://account.nonenull.top') return;
+    if (event.data?.type !== 'NTODO_TURNSTILE_TOKEN') return;
+    syncTurnstileToken = String(event.data.token || '');
+  });
+  reloadSyncTurnstileFrame();
+}
+
+function startSyncCodeCooldown(seconds = 60) {
+  syncCodeCooldownUntil = Date.now() + Math.max(1, Number(seconds) || 60) * 1000;
+  window.clearInterval(syncCodeCooldownTimer);
+  const button = $('#syncSendCodeButton');
+  const tick = () => {
+    const left = Math.ceil((syncCodeCooldownUntil - Date.now()) / 1000);
+    if (!button) return;
+    if (left > 0) {
+      button.textContent = `${left} 秒后重发`;
+      button.disabled = true;
+      return;
+    }
+    button.textContent = '发送验证码';
+    button.disabled = false;
+    window.clearInterval(syncCodeCooldownTimer);
+    syncCodeCooldownUntil = 0;
+  };
+  tick();
+  syncCodeCooldownTimer = window.setInterval(tick, 1000);
+}
+
+async function sendSyncRegisterCode() {
+  const sync = ensureSyncState();
+  const email = $('#syncRegisterEmailInput').value.trim().toLowerCase();
+  sync.email = email;
+  sync.lastError = '';
+  updateSyncStatus();
+
+  if (!email) {
+    setSyncError('请输入邮箱');
+    return;
+  }
+  if (!syncTurnstileToken) {
+    setSyncError('请先完成人机验证');
+    return;
+  }
+
+  try {
+    sync.status = 'syncing';
+    updateSyncStatus();
+    await apiCall('/auth/register/code', {
+      method: 'POST',
+      token: '',
+      body: {
+        email,
+        cf_turnstile_token: syncTurnstileToken
+      }
+    });
+    sync.status = 'offline';
+    sync.lastError = '';
+    updateSyncStatus();
+    startSyncCodeCooldown(60);
+    showEncouragement('add', '验证码已发送，请查收邮箱');
+  } catch (error) {
+    sync.status = 'error';
+    sync.lastError = error.message || '验证码发送失败';
+    updateSyncStatus();
+  } finally {
+    syncTurnstileToken = '';
+    reloadSyncTurnstileFrame();
+    await persist();
+  }
+}
+
 function currentDeviceInfo() {
   return {
     device_id: ensureSyncState().deviceId,
@@ -403,8 +508,12 @@ function currentDeviceInfo() {
 
 async function authenticateSync(mode) {
   const sync = ensureSyncState();
-  const email = $('#syncEmailInput').value.trim().toLowerCase();
-  const password = $('#syncPasswordInput').value;
+  const isRegister = mode === 'register';
+  const emailInput = isRegister ? $('#syncRegisterEmailInput') : $('#syncLoginEmailInput');
+  const passwordInput = isRegister ? $('#syncRegisterPasswordInput') : $('#syncLoginPasswordInput');
+  const email = emailInput.value.trim().toLowerCase();
+  const password = passwordInput.value;
+  const code = $('#syncCodeInput')?.value.trim() || '';
   sync.email = email;
   sync.lastError = '';
   updateSyncStatus();
@@ -414,19 +523,28 @@ async function authenticateSync(mode) {
     await persist();
     return;
   }
+  if (isRegister && !/^\d{6}$/.test(code)) {
+    setSyncError('请输入邮件中的 6 位验证码');
+    await persist();
+    return;
+  }
 
   try {
     sync.status = 'syncing';
     updateSyncStatus();
-    const data = await apiCall(mode === 'register' ? '/auth/register' : '/auth/login', {
+    const body = {
+      email,
+      password,
+      device: currentDeviceInfo()
+    };
+    if (isRegister) {
+      body.name = email.split('@')[0];
+      body.code = code;
+    }
+    const data = await apiCall(isRegister ? '/auth/register' : '/auth/login', {
       method: 'POST',
       token: '',
-      body: {
-        email,
-        password,
-        name: email.split('@')[0],
-        device: currentDeviceInfo()
-      }
+      body
     });
     sync.userId = data.user.id;
     sync.email = data.user.email;
@@ -436,21 +554,23 @@ async function authenticateSync(mode) {
     sync.lastServerVersion = Number(sync.lastServerVersion) || 0;
     sync.status = 'idle';
     normalizePendingChangesForAccount();
-    $('#syncPasswordInput').value = '';
+    passwordInput.value = '';
+    const syncCodeInput = $('#syncCodeInput');
+    if (isRegister && syncCodeInput) syncCodeInput.value = '';
     await persist();
     await syncUserSettingsOnce();
     sync.lastError = '';
     updateSyncStatus();
-    showEncouragement('add', mode === 'register' ? '注册成功，已登录' : '登录成功');
+    showEncouragement('add', isRegister ? '注册成功，已登录' : '登录成功');
     await syncNow();
   } catch (error) {
     sync.status = 'error';
-    if (mode === 'login' && error.status === 401) {
+    if (!isRegister && error.status === 401) {
       sync.lastError = '账号或密码错误';
-    } else if (mode === 'register' && error.status === 409) {
+    } else if (isRegister && error.status === 409) {
       sync.lastError = '该邮箱已注册，请直接登录';
     } else {
-      sync.lastError = error.message || (mode === 'register' ? '注册失败' : '登录失败');
+      sync.lastError = error.message || (isRegister ? '注册失败' : '登录失败');
     }
     await persist();
     updateSyncStatus();
@@ -772,7 +892,8 @@ function applySettings() {
   renderOpenaiProfiles();
   $('#clipboardShortcutInput').value = state.settings.clipboardAiShortcut || 'Ctrl+Alt+T';
   $('#autoCompleteParentToggle').checked = Boolean(state.settings.autoCompleteParentOnSubtasksDone);
-  $('#syncEmailInput').value = sync.email || '';
+  $('#syncLoginEmailInput').value = sync.email || '';
+  $('#syncRegisterEmailInput').value = sync.email || '';
   updateSyncStatus();
 }
 
@@ -785,7 +906,11 @@ async function logoutSync() {
   sync.status = 'offline';
   sync.lastError = '';
   sync.lastServerVersion = 0;
-  $('#syncPasswordInput').value = '';
+  $('#syncLoginPasswordInput').value = '';
+  $('#syncRegisterPasswordInput').value = '';
+  const syncCodeInput = $('#syncCodeInput');
+  if (syncCodeInput) syncCodeInput.value = '';
+  reloadSyncTurnstileFrame();
   await persist();
   updateSyncStatus();
 }
@@ -803,24 +928,39 @@ function settingsSnapshot() {
   };
 }
 
+function mergeOpenaiProfiles(primary = [], secondary = []) {
+  const merged = [];
+  const seen = new Set();
+  [...primary, ...secondary].forEach((profile) => {
+    const item = createOpenaiProfile(profile);
+    if (!item.apiKey || seen.has(item.id)) return;
+    seen.add(item.id);
+    merged.push(item);
+  });
+  return merged;
+}
+
 async function syncUserSettingsOnce() {
   const sync = ensureSyncState();
   if (!sync.accessToken) return;
   ensureOpenaiProfiles();
-  if (!state.settings.settingsUpdatedAt) state.settings.settingsUpdatedAt = nowIso();
+  const hadLocalSettingsStamp = Boolean(state.settings.settingsUpdatedAt);
 
   const remote = await apiCall('/user/settings', { timeoutMs: 15000 });
   const remoteSettings = remote?.settings && typeof remote.settings === 'object' ? remote.settings : {};
   const remoteUpdatedAt = remote.updated_at || remoteSettings.settingsUpdatedAt || '';
   const hasRemoteSettings = Object.keys(remoteSettings).length > 0;
   const remoteTime = timeValue(remoteUpdatedAt);
-  const localTime = timeValue(state.settings.settingsUpdatedAt);
+  const localTime = hadLocalSettingsStamp ? timeValue(state.settings.settingsUpdatedAt) : 0;
+  const localProfiles = Array.isArray(state.settings.openaiProfiles) ? state.settings.openaiProfiles : [];
+  const remoteProfiles = Array.isArray(remoteSettings.openaiProfiles) ? remoteSettings.openaiProfiles : [];
 
-  if (hasRemoteSettings && remoteTime > localTime) {
+  if (hasRemoteSettings && (!hadLocalSettingsStamp || remoteTime > localTime)) {
     state.settings = {
       ...state.settings,
       ...remoteSettings,
-      settingsUpdatedAt: new Date(remoteTime).toISOString()
+      openaiProfiles: mergeOpenaiProfiles(remoteProfiles, localProfiles),
+      settingsUpdatedAt: remoteTime ? new Date(remoteTime).toISOString() : (remoteSettings.settingsUpdatedAt || nowIso())
     };
     ensureOpenaiProfiles();
     applySettings();
@@ -828,6 +968,15 @@ async function syncUserSettingsOnce() {
     return;
   }
 
+  if (hasRemoteSettings && remoteProfiles.length) {
+    state.settings.openaiProfiles = mergeOpenaiProfiles(localProfiles, remoteProfiles);
+    if (!state.settings.openaiProfiles.some((profile) => profile.id === state.settings.activeOpenaiProfileId)) {
+      state.settings.activeOpenaiProfileId = state.settings.openaiProfiles[0]?.id || '';
+    }
+    syncActiveOpenaiSettings();
+  }
+
+  if (!state.settings.settingsUpdatedAt) state.settings.settingsUpdatedAt = nowIso();
   const snapshot = settingsSnapshot();
   await apiCall('/user/settings', {
     method: 'PUT',
@@ -1559,13 +1708,18 @@ function bindEvents() {
     await persist();
   });
 
-  $('#syncEmailInput').addEventListener('change', async (event) => {
-    ensureSyncState().email = event.currentTarget.value.trim().toLowerCase();
-    await persist();
-    updateSyncStatus();
+  ['#syncLoginEmailInput', '#syncRegisterEmailInput'].forEach((selector) => {
+    $(selector).addEventListener('change', async (event) => {
+      ensureSyncState().email = event.currentTarget.value.trim().toLowerCase();
+      await persist();
+      updateSyncStatus();
+    });
   });
 
+  $('#syncLoginModeButton').addEventListener('click', () => setSyncAuthMode('login'));
+  $('#syncRegisterModeButton').addEventListener('click', () => setSyncAuthMode('register'));
   $('#syncLoginButton').addEventListener('click', () => authenticateSync('login'));
+  $('#syncSendCodeButton').addEventListener('click', sendSyncRegisterCode);
   $('#syncRegisterButton').addEventListener('click', () => authenticateSync('register'));
   $('#syncNowButton').addEventListener('click', syncNow);
   $('#syncLogoutButton').addEventListener('click', logoutSync);
@@ -1631,6 +1785,7 @@ function bindEvents() {
 async function boot() {
   bindEvents();
   bindInteractionLayer();
+  setupSyncTurnstile();
   const stored = await window.ntodo.readStore();
   loadStore(stored);
   await persist();

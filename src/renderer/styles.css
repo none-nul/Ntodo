@@ -860,7 +860,7 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
 }
 
 .settings-card {
-  width: min(314px, 100%);
+  width: min(430px, calc(100vw - 28px));
   max-height: calc(100vh - 72px);
   overflow: auto;
   padding: 14px;
@@ -880,7 +880,7 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
 
 .settings-layout {
   display: grid;
-  grid-template-columns: 74px 1fr;
+  grid-template-columns: 82px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -1043,6 +1043,8 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
 }
 
 .api-profile-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 8px;
   border: 1px solid rgba(52, 45, 34, 0.1);
   border-radius: 10px;
@@ -1097,6 +1099,18 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   color: #b94332;
 }
 
+.api-profile-action.danger {
+  grid-column: 2;
+}
+
+.api-profile-item .api-profile-action:first-of-type {
+  grid-row: 1;
+}
+
+.api-profile-item .api-profile-action.danger {
+  grid-row: 2;
+}
+
 .api-editor {
   padding: 10px;
   border: 1px solid rgba(28, 124, 104, 0.22);
@@ -1134,14 +1148,71 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   display: none;
 }
 
-.sync-actions {
+.sync-auth-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.sync-auth-switch button {
+  min-height: 34px;
+  border: 1px solid rgba(28, 124, 104, 0.18);
+  border-radius: 9px;
+  background: rgba(28, 124, 104, 0.08);
+  color: #1c7c68;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sync-auth-switch button.active {
+  background: #1c7c68;
+  color: #fff;
+}
+
+.sync-auth-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.sync-auth-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(52, 45, 34, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.sync-auth-title strong {
+  display: block;
+  color: #343027;
+  font-size: 13px;
+}
+
+.sync-auth-title small {
+  display: block;
+  margin-top: 3px;
+  color: #776d5c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sync-register-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.sync-actions {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 7px;
   padding: 10px 0;
   border-top: 1px solid rgba(52, 45, 34, 0.08);
 }
 
+.sync-auth-panel button,
 .sync-actions button {
   min-height: 34px;
   border: 1px solid rgba(52, 45, 34, 0.12);
@@ -1152,16 +1223,20 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
   font-weight: 800;
 }
 
-.sync-actions button:first-child,
-.sync-actions button:last-child {
+#syncLoginButton,
+#syncRegisterButton,
+#syncNowButton {
   background: #1c7c68;
   color: #fff;
 }
 
-.sync-actions button:last-child {
-  grid-column: 1 / -1;
+#syncSendCodeButton {
+  border-color: rgba(28, 124, 104, 0.22);
+  background: rgba(28, 124, 104, 0.08);
+  color: #1c7c68;
 }
 
+.sync-auth-panel button[hidden],
 .sync-actions button[hidden] {
   display: none;
 }
@@ -1174,8 +1249,25 @@ body.interaction-far .settings-card::-webkit-scrollbar-thumb {
 
 .sync-account-panel[hidden],
 #syncGuestFields[hidden],
+#syncLoginPanel[hidden],
+#syncRegisterPanel[hidden],
 #syncIntervalRow[hidden] {
   display: none;
+}
+
+.sync-turnstile {
+  min-height: 78px;
+  overflow: hidden;
+  border: 1px solid rgba(52, 45, 34, 0.08);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.sync-turnstile iframe {
+  display: block;
+  width: 100%;
+  height: 82px;
+  border: 0;
 }
 
 .sync-account-panel strong {
