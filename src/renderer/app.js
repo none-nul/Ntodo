@@ -642,6 +642,7 @@ async function syncNow() {
     flushLocalOrphans();
     await pushPendingChanges();
     await pullRemoteChanges();
+    await syncUserSettingsOnce();
     if (sync.outbox.some((change) => change.status === 'pending')) {
       await pushPendingChanges();
     }
@@ -865,6 +866,17 @@ async function syncUserSettingsOnce() {
   await persist();
 }
 
+async function persistAndSyncUserSettings() {
+  await persist();
+  try {
+    await syncUserSettingsOnce();
+  } catch (error) {
+    ensureSyncState().lastError = error.message || '设置同步失败';
+    updateSyncStatus();
+    await persist();
+  }
+}
+
 function openOpenaiEditor(profileId = '') {
   const profiles = ensureOpenaiProfiles();
   const profile = profiles.find((item) => item.id === profileId);
@@ -906,7 +918,7 @@ function renderOpenaiProfiles() {
       markSettingsChanged();
       closeOpenaiEditor();
       renderOpenaiProfiles();
-      await persist();
+      await persistAndSyncUserSettings();
     });
 
     const edit = document.createElement('button');
@@ -928,7 +940,7 @@ function renderOpenaiProfiles() {
       markSettingsChanged();
       closeOpenaiEditor();
       renderOpenaiProfiles();
-      await persist();
+      await persistAndSyncUserSettings();
     });
 
     item.append(info, edit, remove);
@@ -970,7 +982,7 @@ async function saveOpenaiProfile() {
   markSettingsChanged();
   closeOpenaiEditor();
   renderOpenaiProfiles();
-  await persist();
+  await persistAndSyncUserSettings();
 }
 
 async function testOpenaiProfile() {
