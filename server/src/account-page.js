@@ -250,7 +250,7 @@ function accountPageHtml() {
     logoutButton.addEventListener('click', () => { setToken(''); renderGuest(); clearMsg(); });
     refreshButton.addEventListener('click', async () => { refreshButton.disabled = true; try { await loadDashboard(); clearMsg(); } catch (error) { msg(error.message || '刷新失败。', true); } finally { refreshButton.disabled = false; } });
     renderTurnstile();
-    setAuthMode('login');
+    setAuthMode(window.location.hash === '#register' ? 'register' : 'login');
     refreshAccount();
   </script>
 </body>

@@ -152,11 +152,6 @@
             <section class="settings-section" data-settings-section="sync">
               <div id="syncErrorBox" class="sync-error-box" hidden></div>
 
-              <div id="syncAuthSwitch" class="sync-auth-switch">
-                <button id="syncLoginModeButton" class="active" type="button">登录</button>
-                <button id="syncRegisterModeButton" type="button">注册</button>
-              </div>
-
               <div id="syncGuestFields" class="sync-auth-grid">
                 <section id="syncLoginPanel" class="sync-auth-panel" aria-labelledby="syncLoginTitle">
                   <span class="sync-auth-title">
@@ -180,47 +175,8 @@
                     <input id="syncLoginPasswordInput" class="setting-input" type="password" placeholder="Password" autocomplete="current-password" />
                   </label>
 
+                  <button id="syncOpenRegisterLink" class="sync-register-link" type="button">没有账号？去网页注册</button>
                   <button id="syncLoginButton" type="button">登录</button>
-                </section>
-
-                <section id="syncRegisterPanel" class="sync-auth-panel" aria-labelledby="syncRegisterTitle" hidden>
-                  <span class="sync-auth-title">
-                    <strong id="syncRegisterTitle">注册</strong>
-                    <small>先完成人机验证并发送邮箱验证码。</small>
-                  </span>
-
-                  <label class="setting-column">
-                    <span>
-                      <strong>注册邮箱</strong>
-                      <small>验证码会发送到这个邮箱。</small>
-                    </span>
-                    <input id="syncRegisterEmailInput" class="setting-input" type="email" placeholder="you@example.com" autocomplete="email" />
-                  </label>
-
-                  <label class="setting-column">
-                    <span>
-                      <strong>密码</strong>
-                      <small>至少 8 位。</small>
-                    </span>
-                    <input id="syncRegisterPasswordInput" class="setting-input" type="password" placeholder="Password" autocomplete="new-password" />
-                  </label>
-
-                  <label class="setting-column">
-                    <span>
-                      <strong>验证码</strong>
-                      <small>邮箱验证通过后才会创建账号。</small>
-                    </span>
-                    <input id="syncCodeInput" class="setting-input" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" />
-                  </label>
-
-                  <div class="sync-turnstile">
-                    <iframe id="syncTurnstileFrame" title="Ntodo human verification"></iframe>
-                  </div>
-
-                  <div class="sync-register-actions">
-                    <button id="syncSendCodeButton" type="button">发送验证码</button>
-                    <button id="syncRegisterButton" type="button">注册</button>
-                  </div>
                 </section>
               </div>
 

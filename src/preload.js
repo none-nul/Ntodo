@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('ntodo', {
   parseNaturalTask: (payload) => ipcRenderer.invoke('ai:parse-task', payload),
   testOpenAiConfig: (payload) => ipcRenderer.invoke('ai:test-config', payload),
   apiRequest: (payload) => ipcRenderer.invoke('api:request', payload),
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   setClipboardShortcut: (shortcut) => ipcRenderer.invoke('clipboard-ai:set-shortcut', shortcut),
   confirmClipboardTasks: (tasks) => ipcRenderer.invoke('clipboard-ai:confirm', tasks),
   cancelClipboardPreview: () => ipcRenderer.invoke('clipboard-ai:cancel-preview'),

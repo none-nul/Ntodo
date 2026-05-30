@@ -1,5 +1,6 @@
 ﻿const { app, BrowserWindow, ipcMain, screen, Tray, Menu } = require('electron');
 const { clipboard, globalShortcut } = require('electron');
+const { shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 
@@ -258,6 +259,14 @@ async function apiRequest(_event, payload = {}) {
 }
 
 ipcMain.handle('api:request', apiRequest);
+ipcMain.handle('shell:open-external', async (_event, url) => {
+  const target = String(url || '');
+  if (!/^https:\/\/account\.nonenull\.top(\/|#|$)/.test(target)) {
+    throw new Error('Unsupported external URL');
+  }
+  await shell.openExternal(target);
+  return { ok: true };
+});
 
 async function testOpenAiConfig(_event, payload = {}) {
   const apiKey = String(payload.apiKey || '').trim();

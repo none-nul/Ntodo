@@ -47,11 +47,7 @@ const priorityConfig = {
 };
 
 const $ = (selector) => document.querySelector(selector);
-const SYNC_CHALLENGE_URL = 'https://api.nonenull.top/auth/register/challenge';
-let syncTurnstileToken = '';
-let syncCodeCooldownTimer = null;
-let syncCodeCooldownUntil = 0;
-let syncAuthMode = 'login';
+const ACCOUNT_REGISTER_URL = 'https://account.nonenull.top/#register';
 const activeView = $('#activeView');
 const completedView = $('#completedView');
 const taskTemplate = $('#taskTemplate');
@@ -363,22 +359,12 @@ function updateSyncStatus() {
     errorBox.hidden = !sync.lastError;
   }
   $('#syncGuestFields').hidden = isLoggedIn;
-  const syncAuthSwitch = $('#syncAuthSwitch');
-  if (syncAuthSwitch) syncAuthSwitch.hidden = isLoggedIn;
   const loginPanel = $('#syncLoginPanel');
-  const registerPanel = $('#syncRegisterPanel');
-  if (loginPanel) loginPanel.hidden = isLoggedIn || syncAuthMode !== 'login';
-  if (registerPanel) registerPanel.hidden = isLoggedIn || syncAuthMode !== 'register';
-  const loginModeButton = $('#syncLoginModeButton');
-  const registerModeButton = $('#syncRegisterModeButton');
-  if (loginModeButton) loginModeButton.classList.toggle('active', syncAuthMode === 'login');
-  if (registerModeButton) registerModeButton.classList.toggle('active', syncAuthMode === 'register');
+  if (loginPanel) loginPanel.hidden = isLoggedIn;
   $('#syncAccountPanel').hidden = !isLoggedIn;
   const syncIntervalRow = $('#syncIntervalRow');
   if (syncIntervalRow) syncIntervalRow.hidden = true;
   $('#syncLoginButton').hidden = isLoggedIn;
-  $('#syncSendCodeButton').hidden = isLoggedIn;
-  $('#syncRegisterButton').hidden = isLoggedIn;
   $('#syncLogoutButton').hidden = !isLoggedIn;
   if (isLoggedIn) {
     $('#syncAccountEmail').textContent = sync.email || '已登录';
@@ -388,16 +374,6 @@ function updateSyncStatus() {
   if (statusText) statusText.textContent = syncSummary();
   const syncButton = $('#syncNowButton');
   if (syncButton) syncButton.disabled = sync.status === 'syncing' || !sync.accessToken;
-  const sendCodeButton = $('#syncSendCodeButton');
-  if (sendCodeButton && Date.now() >= syncCodeCooldownUntil) {
-    sendCodeButton.disabled = sync.status === 'syncing' || isLoggedIn;
-  }
-}
-
-function setSyncAuthMode(mode) {
-  syncAuthMode = mode === 'register' ? 'register' : 'login';
-  ensureSyncState().lastError = '';
-  updateSyncStatus();
 }
 
 async function apiCall(pathName, options = {}) {
@@ -419,85 +395,6 @@ async function apiCall(pathName, options = {}) {
   return response.data;
 }
 
-function reloadSyncTurnstileFrame() {
-  syncTurnstileToken = '';
-  const frame = $('#syncTurnstileFrame');
-  if (frame) frame.src = `${SYNC_CHALLENGE_URL}?t=${Date.now()}`;
-}
-
-function setupSyncTurnstile() {
-  window.addEventListener('message', (event) => {
-    if (event.origin !== 'https://api.nonenull.top' && event.origin !== 'https://account.nonenull.top') return;
-    if (event.data?.type !== 'NTODO_TURNSTILE_TOKEN') return;
-    syncTurnstileToken = String(event.data.token || '');
-  });
-  reloadSyncTurnstileFrame();
-}
-
-function startSyncCodeCooldown(seconds = 60) {
-  syncCodeCooldownUntil = Date.now() + Math.max(1, Number(seconds) || 60) * 1000;
-  window.clearInterval(syncCodeCooldownTimer);
-  const button = $('#syncSendCodeButton');
-  const tick = () => {
-    const left = Math.ceil((syncCodeCooldownUntil - Date.now()) / 1000);
-    if (!button) return;
-    if (left > 0) {
-      button.textContent = `${left} 秒后重发`;
-      button.disabled = true;
-      return;
-    }
-    button.textContent = '发送验证码';
-    button.disabled = false;
-    window.clearInterval(syncCodeCooldownTimer);
-    syncCodeCooldownUntil = 0;
-  };
-  tick();
-  syncCodeCooldownTimer = window.setInterval(tick, 1000);
-}
-
-async function sendSyncRegisterCode() {
-  const sync = ensureSyncState();
-  const email = $('#syncRegisterEmailInput').value.trim().toLowerCase();
-  sync.email = email;
-  sync.lastError = '';
-  updateSyncStatus();
-
-  if (!email) {
-    setSyncError('请输入邮箱');
-    return;
-  }
-  if (!syncTurnstileToken) {
-    setSyncError('请先完成人机验证');
-    return;
-  }
-
-  try {
-    sync.status = 'syncing';
-    updateSyncStatus();
-    await apiCall('/auth/register/code', {
-      method: 'POST',
-      token: '',
-      body: {
-        email,
-        cf_turnstile_token: syncTurnstileToken
-      }
-    });
-    sync.status = 'offline';
-    sync.lastError = '';
-    updateSyncStatus();
-    startSyncCodeCooldown(60);
-    showEncouragement('add', '验证码已发送，请查收邮箱');
-  } catch (error) {
-    sync.status = 'error';
-    sync.lastError = error.message || '验证码发送失败';
-    updateSyncStatus();
-  } finally {
-    syncTurnstileToken = '';
-    reloadSyncTurnstileFrame();
-    await persist();
-  }
-}
-
 function currentDeviceInfo() {
   return {
     device_id: ensureSyncState().deviceId,
@@ -508,12 +405,10 @@ function currentDeviceInfo() {
 
 async function authenticateSync(mode) {
   const sync = ensureSyncState();
-  const isRegister = mode === 'register';
-  const emailInput = isRegister ? $('#syncRegisterEmailInput') : $('#syncLoginEmailInput');
-  const passwordInput = isRegister ? $('#syncRegisterPasswordInput') : $('#syncLoginPasswordInput');
+  const emailInput = $('#syncLoginEmailInput');
+  const passwordInput = $('#syncLoginPasswordInput');
   const email = emailInput.value.trim().toLowerCase();
   const password = passwordInput.value;
-  const code = $('#syncCodeInput')?.value.trim() || '';
   sync.email = email;
   sync.lastError = '';
   updateSyncStatus();
@@ -523,12 +418,6 @@ async function authenticateSync(mode) {
     await persist();
     return;
   }
-  if (isRegister && !/^\d{6}$/.test(code)) {
-    setSyncError('请输入邮件中的 6 位验证码');
-    await persist();
-    return;
-  }
-
   try {
     sync.status = 'syncing';
     updateSyncStatus();
@@ -537,11 +426,7 @@ async function authenticateSync(mode) {
       password,
       device: currentDeviceInfo()
     };
-    if (isRegister) {
-      body.name = email.split('@')[0];
-      body.code = code;
-    }
-    const data = await apiCall(isRegister ? '/auth/register' : '/auth/login', {
+    const data = await apiCall('/auth/login', {
       method: 'POST',
       token: '',
       body
@@ -555,22 +440,18 @@ async function authenticateSync(mode) {
     sync.status = 'idle';
     normalizePendingChangesForAccount();
     passwordInput.value = '';
-    const syncCodeInput = $('#syncCodeInput');
-    if (isRegister && syncCodeInput) syncCodeInput.value = '';
     await persist();
     await syncUserSettingsOnce();
     sync.lastError = '';
     updateSyncStatus();
-    showEncouragement('add', isRegister ? '注册成功，已登录' : '登录成功');
+    showEncouragement('add', '登录成功');
     await syncNow();
   } catch (error) {
     sync.status = 'error';
-    if (!isRegister && error.status === 401) {
+    if (error.status === 401) {
       sync.lastError = '账号或密码错误';
-    } else if (isRegister && error.status === 409) {
-      sync.lastError = '该邮箱已注册，请直接登录';
     } else {
-      sync.lastError = error.message || (isRegister ? '注册失败' : '登录失败');
+      sync.lastError = error.message || '登录失败';
     }
     await persist();
     updateSyncStatus();
@@ -893,7 +774,6 @@ function applySettings() {
   $('#clipboardShortcutInput').value = state.settings.clipboardAiShortcut || 'Ctrl+Alt+T';
   $('#autoCompleteParentToggle').checked = Boolean(state.settings.autoCompleteParentOnSubtasksDone);
   $('#syncLoginEmailInput').value = sync.email || '';
-  $('#syncRegisterEmailInput').value = sync.email || '';
   updateSyncStatus();
 }
 
@@ -907,10 +787,6 @@ async function logoutSync() {
   sync.lastError = '';
   sync.lastServerVersion = 0;
   $('#syncLoginPasswordInput').value = '';
-  $('#syncRegisterPasswordInput').value = '';
-  const syncCodeInput = $('#syncCodeInput');
-  if (syncCodeInput) syncCodeInput.value = '';
-  reloadSyncTurnstileFrame();
   await persist();
   updateSyncStatus();
 }
@@ -1708,19 +1584,14 @@ function bindEvents() {
     await persist();
   });
 
-  ['#syncLoginEmailInput', '#syncRegisterEmailInput'].forEach((selector) => {
-    $(selector).addEventListener('change', async (event) => {
-      ensureSyncState().email = event.currentTarget.value.trim().toLowerCase();
-      await persist();
-      updateSyncStatus();
-    });
+  $('#syncLoginEmailInput').addEventListener('change', async (event) => {
+    ensureSyncState().email = event.currentTarget.value.trim().toLowerCase();
+    await persist();
+    updateSyncStatus();
   });
 
-  $('#syncLoginModeButton').addEventListener('click', () => setSyncAuthMode('login'));
-  $('#syncRegisterModeButton').addEventListener('click', () => setSyncAuthMode('register'));
   $('#syncLoginButton').addEventListener('click', () => authenticateSync('login'));
-  $('#syncSendCodeButton').addEventListener('click', sendSyncRegisterCode);
-  $('#syncRegisterButton').addEventListener('click', () => authenticateSync('register'));
+  $('#syncOpenRegisterLink').addEventListener('click', () => window.ntodo.openExternal(ACCOUNT_REGISTER_URL));
   $('#syncNowButton').addEventListener('click', syncNow);
   $('#syncLogoutButton').addEventListener('click', logoutSync);
 
@@ -1785,7 +1656,6 @@ function bindEvents() {
 async function boot() {
   bindEvents();
   bindInteractionLayer();
-  setupSyncTurnstile();
   const stored = await window.ntodo.readStore();
   loadStore(stored);
   await persist();
